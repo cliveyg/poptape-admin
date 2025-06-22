@@ -1,0 +1,18 @@
+# Ignore everything in the root
+/*
+/.env
+
+# Un-ignore these files - it's bit of a clonky way to do it but it's more secure
+!.env.example
+!.gitignore
+!go.mod
+!admin.go
+!go.sum
+!middleware.go
+!docker-compose.yml
+!Dockerfile
+!routes.go
+!models.go
+!misc.go
+!utils/*
+!utils/utils.go
