@@ -7,12 +7,14 @@
 !.gitignore
 !go.mod
 !admin.go
+!app.go
 !go.sum
 !middleware.go
 !docker-compose.yml
 !Dockerfile
 !routes.go
 !models.go
-!misc.go
-!utils/*
+!database.go
 !utils/utils.go
+!README.md
+!LICENSE

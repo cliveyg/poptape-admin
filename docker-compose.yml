@@ -18,10 +18,10 @@ services:
         max-size: "10Mb"
         max-file: "5"
     depends_on:
-      - admin_db
+      - db
     networks:
       - poptape
-  admin_db:
+  db:
     image: postgres:alpine
     restart: always
     ports:
@@ -39,3 +39,4 @@ networks:
     external: true
 volumes:
   poptape_admin_data:
+    name: poptape_admin_data
