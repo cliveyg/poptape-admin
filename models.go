@@ -2,11 +2,12 @@ package main
 
 import (
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"time"
 )
 
-type Users struct {
-	AdminId   uuid.UUID `json:"admin_id" gorm:"type:uuid;primary_key;"`
+type User struct {
+	AdminId   string    `json:"admin_id" gorm:"type:uuid;primary_key;"`
 	Username  string    `json:"username" gorm:"unique"`
 	Password  string    `json:"password"`
 	LastLogin time.Time `json:"last_login"`
@@ -15,8 +16,13 @@ type Users struct {
 	Created   time.Time `json:"created"`
 }
 
-type Creds struct {
-	CredId         uuid.UUID `json:"cred_id" gorm:"type:uuid;primary_key;"`
+func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
+	u.AdminId = uuid.New().String()
+	return
+}
+
+type Cred struct {
+	CredId         string    `json:"cred_id" gorm:"type:uuid;primary_key;"`
 	MicroserviceId string    `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
 	RoleId         string    `json:"role_id" gorm:"foreignKey:RoleId"`
 	DBName         string    `json:"db_name" gorm:"unique"`
@@ -30,17 +36,32 @@ type Creds struct {
 	Created        time.Time `json:"created"`
 }
 
+func (c *Cred) BeforeCreate(_ *gorm.DB) (err error) {
+	c.CredId = uuid.New().String()
+	return
+}
+
 type Microservice struct {
-	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid;primary_key;"`
+	MicroserviceId string    `json:"microservice_id" gorm:"type:uuid;primary_key;"`
 	Name           string    `json:"name" gorm:"unique"`
 	RoleId         string    `json:"role_id" gorm:"foreignKey:RoleId"`
 	Created        time.Time `json:"created"`
 }
 
-type APIPaths struct {
-	APIPathId      uuid.UUID `json:"api_path_id" gorm:"type:uuid;primary_key;"`
-	MicroserviceId string    `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
-	Path           string    `json:"path"`
+func (m *Microservice) BeforeCreate(_ *gorm.DB) (err error) {
+	m.MicroserviceId = uuid.New().String()
+	return
+}
+
+type APIPath struct {
+	APIPathId      string `json:"api_path_id" gorm:"type:uuid;primary_key;"`
+	MicroserviceId string `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
+	Path           string `json:"path"`
+}
+
+func (a *APIPath) BeforeCreate(_ *gorm.DB) (err error) {
+	a.APIPathId = uuid.New().String()
+	return
 }
 
 type Login struct {
@@ -54,14 +75,19 @@ type Signup struct {
 	ConfirmPassword string `json:"confirm_password"`
 }
 
-type UserRoles struct {
+type UserRole struct {
 	AdminId string    `json:"admin_id" gorm:"foreignKey:AdminId"`
 	RoleId  string    `json:"role_id" gorm:"foreignKey:RoleId"`
 	Created time.Time `json:"created"`
 }
 
-type Roles struct {
-	RoleId   uuid.UUID `json:"role_id" gorm:"type:uuid;primary_key;"`
+type Role struct {
+	RoleId   string    `json:"role_id" gorm:"type:uuid;primary_key;"`
 	RoleName string    `json:"role_name"`
 	Created  time.Time `json:"created"`
+}
+
+func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
+	r.RoleId = uuid.New().String()
+	return
 }
