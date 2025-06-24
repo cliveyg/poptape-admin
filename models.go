@@ -9,7 +9,7 @@ import (
 type User struct {
 	AdminId   uuid.UUID `json:"admin_id" gorm:"type:uuid;primary_key;"`
 	Username  string    `json:"username" gorm:"unique"`
-	Password  string    `json:"password"`
+	Password  []byte    `json:"password"`
 	LastLogin time.Time `json:"last_login"`
 	Active    bool      `json:"active"`
 	Validated bool      `json:"validated"`
@@ -18,6 +18,9 @@ type User struct {
 
 func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
 	u.AdminId = uuid.New()
+	u.Created = time.Now()
+	u.Active = true
+	u.Validated = false
 	return
 }
 
@@ -38,6 +41,7 @@ type Cred struct {
 
 func (c *Cred) BeforeCreate(_ *gorm.DB) (err error) {
 	c.CredId = uuid.New()
+	c.Created = time.Now()
 	return
 }
 
@@ -50,6 +54,7 @@ type Microservice struct {
 
 func (m *Microservice) BeforeCreate(_ *gorm.DB) (err error) {
 	m.MicroserviceId = uuid.New()
+	m.Created = time.Now()
 	return
 }
 
@@ -65,20 +70,25 @@ func (a *APIPath) BeforeCreate(_ *gorm.DB) (err error) {
 }
 
 type Login struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 type Signup struct {
-	Username        string `json:"username"`
-	Password        string `json:"password"`
-	ConfirmPassword string `json:"confirm_password"`
+	Username        string `json:"username" binding:"required"`
+	Password        string `json:"password" binding:"required"`
+	ConfirmPassword string `json:"confirm_password" binding:"required"`
 }
 
 type UserRole struct {
 	AdminId uuid.UUID `json:"admin_id" gorm:"foreignKey:AdminId"`
 	RoleId  uuid.UUID `json:"role_id" gorm:"foreignKey:RoleId"`
 	Created time.Time `json:"created"`
+}
+
+func (ur *UserRole) BeforeCreate(_ *gorm.DB) (err error) {
+	ur.Created = time.Now()
+	return
 }
 
 type Role struct {
@@ -89,5 +99,6 @@ type Role struct {
 
 func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
 	r.RoleId = uuid.New()
+	r.Created = time.Now()
 	return
 }

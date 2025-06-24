@@ -26,8 +26,8 @@ COPY --from=build /app/.env /admin
 WORKDIR /admin
 
 
-# Make port 9300 available to the world outside this container
-EXPOSE 9300
+# Make port available to the world outside this container
+EXPOSE $PORT
 
 # Run admin binary when the container launches
 CMD ["./admin"]
