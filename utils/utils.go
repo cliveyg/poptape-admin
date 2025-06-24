@@ -4,16 +4,22 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"os"
+	"strconv"
+	"time"
 )
 
-func GenerateHashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
+func GenerateHashPassword(password string) ([]byte, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return b, err
 }
 
-func VerifyPassword(password string, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+func VerifyPassword(password string, hashed []byte) bool {
+	bp := []byte(password)
+	err := bcrypt.CompareHashAndPassword(hashed, bp)
 	return err == nil
 }
 
@@ -65,4 +71,27 @@ func Decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
 	}
 
 	return plaintext, nil
+}
+
+func GenerateToken(username string, adminId uuid.UUID) (string, error) {
+
+	tokenLifespan, err := strconv.Atoi(os.Getenv("TOKEN_LIFESPAN"))
+	if err != nil {
+		return "", err
+	}
+
+	claims := jwt.MapClaims{}
+	claims["authorized"] = true
+	claims["username"] = username
+	claims["admin_id"] = adminId.String()
+	claims["exp"] = time.Now().Add(time.Minute * time.Duration(tokenLifespan)).Unix()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	var rs string
+	rs, err = token.SignedString([]byte(os.Getenv("TOKEN_SECRET")))
+	if err != nil {
+		return "", err
+	}
+	return rs, nil
+
 }

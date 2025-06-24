@@ -9,8 +9,6 @@ func (a *App) initializeMiddleWare() {
 	a.Log.Debug().Msg("Initialising middleware")
 	a.Router.Use(a.LoggingMiddleware())
 	a.Router.Use(gin.Recovery())
-	//a.Router.Use(authMiddleware())
-	//a.Router.Use(accessControlMiddleware([]string{""}))
 	a.Router.Use(a.auditMiddleware())
 }
 
@@ -87,7 +85,7 @@ func isRoleAllowed(role string, allowedRoles []string) bool {
 
 func (a *App) LoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		a.Log.Debug().Msgf("Route is [%s] and method is [%s]", c.Request.URL.Path, c.Request.Method)
+		a.Log.Debug().Msgf("Route [%s]; Method [%s]; IP [%s]", c.Request.URL.Path, c.Request.Method, c.Request.RemoteAddr)
 		c.Next()
 	}
 }

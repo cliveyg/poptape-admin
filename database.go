@@ -14,9 +14,9 @@ func (a *App) InitialiseDatabase() {
 
 	// due to postgres docker container not starting
 	// up in time even with depends_on we have to keep
-	// trying to connect. if after 45 secs we still
+	// trying to connect. if after 60 secs we still
 	// haven't connected we log fatal and stop
-	timeout := 45 * time.Second
+	timeout := 60 * time.Second
 	start := time.Now()
 	var err error
 	x := 1
@@ -62,7 +62,6 @@ func (a *App) MigrateModels() {
 	if err != nil {
 		a.Log.Fatal().Err(err)
 	}
-
 	a.Log.Info().Msg("Models migrated successfully")
 }
 
@@ -99,8 +98,22 @@ func (a *App) PopulateDatabase() {
 		a.Log.Fatal().Msg("[Roles] table not found")
 	}
 
-	s := "Ibrahima Konaté is stalling on signing a new deal at Liverpool"
-	a.testEncryptDecrypt(s)
+	if a.DB.Migrator().HasTable(&UserRole{}) {
+		if err404 := a.DB.First(&UserRole{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("No user roles found. Creating user role for first user")
+			err = a.CreateUserRoles()
+			if err != nil {
+				a.Log.Error().Msgf("Unable to create user roles: [%s]", err.Error())
+			}
+		} else {
+			a.Log.Info().Msg("[UserRoles] table already populated")
+		}
+	} else {
+		a.Log.Fatal().Msg("[UserRoles] table not found")
+	}
+
+	//s := "Ibrahima Konaté is stalling on signing a new deal at Liverpool"
+	//a.testEncryptDecrypt(s)
 
 }
 
@@ -142,11 +155,8 @@ func (a *App) CreateFirstUser() error {
 	}
 
 	u := &User{
-		Username:  fu,
-		Password:  encryptedPW,
-		Active:    true,
-		Validated: false,
-		Created:   time.Now(),
+		Username: fu,
+		Password: encryptedPW,
 	}
 
 	res := a.DB.Create(u)
@@ -161,22 +171,51 @@ func (a *App) CreateFirstUser() error {
 func (a *App) CreateRoles() error {
 
 	roles := []*Role{
-		{RoleName: "super", Created: time.Now()},
-		{RoleName: "aws", Created: time.Now()},
-		{RoleName: "items", Created: time.Now()},
-		{RoleName: "reviews", Created: time.Now()},
-		{RoleName: "messages", Created: time.Now()},
-		{RoleName: "auctionhouse", Created: time.Now()},
-		{RoleName: "apiserver", Created: time.Now()},
-		{RoleName: "categories", Created: time.Now()},
-		{RoleName: "address", Created: time.Now()},
-		{RoleName: "fotos", Created: time.Now()},
-		{RoleName: "authy", Created: time.Now()},
+		{RoleName: "super"},
+		{RoleName: "aws"},
+		{RoleName: "items"},
+		{RoleName: "reviews"},
+		{RoleName: "messages"},
+		{RoleName: "auctionhouse"},
+		{RoleName: "apiserver"},
+		{RoleName: "categories"},
+		{RoleName: "address"},
+		{RoleName: "fotos"},
+		{RoleName: "authy"},
 	}
 	res := a.DB.Create(roles)
 	if res.Error != nil {
 		return res.Error
 	}
+
 	a.Log.Info().Msg("Roles created")
+	return nil
+}
+
+func (a *App) CreateUserRoles() error {
+
+	u := User{}
+	res := a.DB.First(&u)
+	if res.Error != nil {
+		return res.Error
+	}
+
+	r := Role{
+		RoleName: "super",
+	}
+	res = a.DB.First(&r)
+	if res.Error != nil {
+		return res.Error
+	}
+
+	ur := UserRole{
+		AdminId: u.AdminId,
+		RoleId:  r.RoleId,
+	}
+	res = a.DB.Create(&ur)
+	if res.Error != nil {
+		return res.Error
+	}
+	a.Log.Info().Msgf("UserRole created for [%s]", u.Username)
 	return nil
 }

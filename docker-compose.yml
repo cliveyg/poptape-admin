@@ -3,12 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    environment:
-      - "GOOS=${GOOS}"
-      - "GOARCH={GOARCH}"
     image: poptape/admin/api:v0.1
     ports:
-      - "1264:9300"
+      - 1264${PORT}
     restart: always
     volumes:
       - ${LOCAL_LOG_LOC}:/admin/log
