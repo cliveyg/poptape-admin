@@ -3,12 +3,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: poptape/admin/api:v0.1
+    environment:
+      - "GOOS=${GOOS}"
+      - "GOARCH=${GOARCH}"
+      - "PORT=${PORT}"
+    image: poptape/admin/api:v${VERSION}
     ports:
-      - 1264${PORT}
+      - "1264:$PORT"
     restart: always
     volumes:
-      - ${LOCAL_LOG_LOC}:/admin/log
+     - ${LOCAL_LOG_LOC}:/admin/log
     logging:
       driver: "json-file"
       options:
@@ -24,9 +28,9 @@ services:
     ports:
       - "1265:5432"
     environment:
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_USER=${DB_USERNAME}
-      - POSTGRES_DB=${DB_NAME}
+      - "POSTGRES_PASSWORD=${DB_PASSWORD}"
+      - "POSTGRES_USER=${DB_USERNAME}"
+      - "POSTGRES_DB=${DB_NAME}"
     volumes:
       - poptape_admin_data:/var/lib/postgresql/data
     networks:

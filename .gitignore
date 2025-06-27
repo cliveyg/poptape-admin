@@ -16,6 +16,7 @@
 !models.go
 !database.go
 !helpers.go
+!handlers.go
 !utils/utils.go
 !README.md
 !LICENSE

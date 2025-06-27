@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+//-----------------------------------------------------------------------------
+
 type User struct {
 	AdminId   uuid.UUID `json:"admin_id" gorm:"type:uuid;primary_key;"`
 	Username  string    `json:"username" gorm:"unique"`
@@ -23,6 +25,8 @@ func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
 	u.Validated = false
 	return
 }
+
+//-----------------------------------------------------------------------------
 
 type Cred struct {
 	CredId         uuid.UUID `json:"cred_id" gorm:"type:uuid;primary_key;"`
@@ -45,6 +49,8 @@ func (c *Cred) BeforeCreate(_ *gorm.DB) (err error) {
 	return
 }
 
+//-----------------------------------------------------------------------------
+
 type Microservice struct {
 	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid;primary_key;"`
 	Name           string    `json:"name" gorm:"unique"`
@@ -58,6 +64,8 @@ func (m *Microservice) BeforeCreate(_ *gorm.DB) (err error) {
 	return
 }
 
+//-----------------------------------------------------------------------------
+
 type APIPath struct {
 	APIPathId      uuid.UUID `json:"api_path_id" gorm:"type:uuid;primary_key;"`
 	MicroserviceId string    `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
@@ -69,16 +77,22 @@ func (a *APIPath) BeforeCreate(_ *gorm.DB) (err error) {
 	return
 }
 
+//-----------------------------------------------------------------------------
+
 type Login struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
+
+//-----------------------------------------------------------------------------
 
 type Signup struct {
 	Username        string `json:"username" binding:"required"`
 	Password        string `json:"password" binding:"required"`
 	ConfirmPassword string `json:"confirm_password" binding:"required"`
 }
+
+//-----------------------------------------------------------------------------
 
 type UserRole struct {
 	AdminId uuid.UUID `json:"admin_id" gorm:"foreignKey:AdminId"`
@@ -91,6 +105,8 @@ func (ur *UserRole) BeforeCreate(_ *gorm.DB) (err error) {
 	return
 }
 
+//-----------------------------------------------------------------------------
+
 type Role struct {
 	RoleId   uuid.UUID `json:"role_id" gorm:"type:uuid;primary_key;"`
 	RoleName string    `json:"role_name"`
@@ -102,3 +118,5 @@ func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
 	r.Created = time.Now()
 	return
 }
+
+//-----------------------------------------------------------------------------

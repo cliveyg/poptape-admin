@@ -19,7 +19,7 @@ func main() {
 	}
 
 	// setup logging - for some reason we have to do this here
-	// when i abstracted it into another method it doesn't seem to work
+	// when abstracted into another method it doesn't seem to work
 	var logFile *os.File
 
 	filePathName := os.Getenv("LOGFILE")
@@ -67,6 +67,6 @@ func main() {
 	a := App{}
 	a.Log = &logger
 	a.InitialiseApp()
-	a.Run(os.Getenv("PORT"))
+	a.Run(":" + os.Getenv("PORT"))
 
 }

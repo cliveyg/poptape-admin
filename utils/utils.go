@@ -4,24 +4,41 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
+	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 	"os"
 	"strconv"
 	"time"
 )
 
+//-----------------------------------------------------------------------------
+
+type Claims struct {
+	Username string `json:"username"`
+	AdminId  string `json:"admin_id"`
+	Exp      int64  `json:"exp"`
+	jwt.RegisteredClaims
+}
+
+//-----------------------------------------------------------------------------
+
 func GenerateHashPassword(password string) ([]byte, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return b, err
 }
+
+//-----------------------------------------------------------------------------
 
 func VerifyPassword(password string, hashed []byte) bool {
 	bp := []byte(password)
 	err := bcrypt.CompareHashAndPassword(hashed, bp)
 	return err == nil
 }
+
+//-----------------------------------------------------------------------------
 
 func Encrypt(ptext []byte, key []byte, nonce []byte) (string, error) {
 
@@ -73,6 +90,8 @@ func Decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+//-----------------------------------------------------------------------------
+
 func GenerateToken(username string, adminId uuid.UUID) (string, error) {
 
 	tokenLifespan, err := strconv.Atoi(os.Getenv("TOKEN_LIFESPAN"))
@@ -81,10 +100,14 @@ func GenerateToken(username string, adminId uuid.UUID) (string, error) {
 	}
 
 	claims := jwt.MapClaims{}
-	claims["authorized"] = true
 	claims["username"] = username
 	claims["admin_id"] = adminId.String()
-	claims["exp"] = time.Now().Add(time.Minute * time.Duration(tokenLifespan)).Unix()
+	// if in DEV env ignore token lifespan and set token to 24h expiry
+	if os.Getenv("ENVIRONMENT") == "DEV" {
+		claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+	} else {
+		claims["exp"] = time.Now().Add(time.Minute * time.Duration(tokenLifespan)).Unix()
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	var rs string
@@ -95,3 +118,24 @@ func GenerateToken(username string, adminId uuid.UUID) (string, error) {
 	return rs, nil
 
 }
+
+//-----------------------------------------------------------------------------
+
+func ParseToken(ts string) (*Claims, error) {
+
+	log.Info().Msgf("Parsing token string [%s]", ts)
+
+	token, err := jwt.ParseWithClaims(ts, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("TOKEN_SECRET")), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		return claims, nil
+	}
+	return nil, errors.New("invalid token claims")
+
+}
+
+//-----------------------------------------------------------------------------
