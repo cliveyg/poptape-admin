@@ -1,11 +1,12 @@
 package main
 
 import (
+	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
-func (a *App) initializeMiddleWare() {
+func (a *App) initialiseMiddleWare() {
 	a.Log.Debug().Msg("Initialising middleware")
 	a.Router.Use(a.LoggingMiddleware())
 	a.Router.Use(gin.Recovery())
@@ -25,26 +26,26 @@ func (a *App) auditMiddleware() gin.HandlerFunc {
 //-----------------------------------------------------------------------------
 
 func (a *App) authMiddleware() gin.HandlerFunc {
+	a.Log.Debug().Msg("Checking auth")
 	return func(c *gin.Context) {
-		//Log.Print("authMiddleware")
-		// Perform authentication checks here
-		// Example: check if the user is logged in
-		if !isLoggedIn(c) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		if !a.hasValidJWT(c) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 			return
 		}
 
-		// Call the next handler
+		var i interface{}
+		i, _ = c.Get("user")
+		u := i.(User)
+		token, err := utils.GenerateToken(u.Username, u.AdminId)
+		if err != nil {
+			a.Log.Info().Msgf("Error creating JWT; Error [%s]", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang"})
+		} else {
+			c.Set("token", token)
+		}
+		// call the next handler
 		c.Next()
 	}
-}
-
-func isLoggedIn(c *gin.Context) bool {
-	// Check if the user is logged in
-	// Example: check if the session contains a username
-	username := c.GetString("username")
-	username = "pass"
-	return username != ""
 }
 
 //-----------------------------------------------------------------------------
