@@ -17,8 +17,12 @@ func (a *App) initialiseRoutes() {
 		a.Login(c)
 	})
 
-	a.Router.GET("/admin/test/token", a.authMiddleware(), func(c *gin.Context) {
-		a.TestToken(c)
+	a.Router.POST("/admin/user", a.authMiddleware(), a.accessControlMiddleware([]string{"super"}), func(c *gin.Context) {
+		a.CreateUser(c)
+	})
+
+	a.Router.GET("/admin/test/route", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
+		a.TestRoute(c)
 	})
 
 }
