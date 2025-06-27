@@ -95,9 +95,9 @@ type Signup struct {
 //-----------------------------------------------------------------------------
 
 type UserRole struct {
-	AdminId uuid.UUID `json:"admin_id" gorm:"foreignKey:AdminId"`
-	RoleId  uuid.UUID `json:"role_id" gorm:"foreignKey:RoleId"`
-	Created time.Time `json:"created"`
+	AdminId  uuid.UUID `json:"admin_id" gorm:"foreignKey:AdminId"`
+	RoleName string    `json:"role_name" gorm:"foreignKey:RoleName"`
+	Created  time.Time `json:"created"`
 }
 
 func (ur *UserRole) BeforeCreate(_ *gorm.DB) (err error) {
@@ -108,13 +108,11 @@ func (ur *UserRole) BeforeCreate(_ *gorm.DB) (err error) {
 //-----------------------------------------------------------------------------
 
 type Role struct {
-	RoleId   uuid.UUID `json:"role_id" gorm:"type:uuid;primary_key;"`
-	RoleName string    `json:"role_name"`
+	RoleName string    `json:"role_name" gorm:"type:string;primary_key;"`
 	Created  time.Time `json:"created"`
 }
 
 func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
-	r.RoleId = uuid.New()
 	r.Created = time.Now()
 	return
 }

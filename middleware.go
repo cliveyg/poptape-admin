@@ -4,6 +4,7 @@ import (
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"os"
 )
 
 func (a *App) initialiseMiddleWare() {
@@ -18,6 +19,9 @@ func (a *App) initialiseMiddleWare() {
 func (a *App) auditMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		//Log.Print("auditMiddleware")
+		if os.Getenv("ENVIRONMENT") == "PROD" {
+
+		}
 
 		c.Next()
 	}
@@ -50,11 +54,22 @@ func (a *App) authMiddleware() gin.HandlerFunc {
 
 //-----------------------------------------------------------------------------
 
-func accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
+func (a *App) accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check if the user has the required role
-		role := getUserRole(c)
-		if !isRoleAllowed(role, allowedRoles) {
+		var ur []UserRole
+		var i interface{}
+		i, _ = c.Get("user")
+		u := i.(User)
+
+		err := a.getUserRoles(&u, &ur)
+		if err != nil {
+			a.Log.Info().Msgf("User [%s] has no roles", u.Username)
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			return
+		}
+		a.Log.Debug().Interface("Roles:", ur).Send()
+		if !a.userHasValidRole(ur, allowedRoles) {
+			a.Log.Info().Msgf("User [%s] forbidden to use [%s]", u.Username, c.Request.URL)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
 			return
 		}
@@ -62,24 +77,6 @@ func accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 		// Call the next handler
 		c.Next()
 	}
-}
-
-func getUserRole(c *gin.Context) string {
-	// Get the user's role from the session or database
-	// Example: get the role from the session
-	role := c.GetString("role")
-	role = "superadmin"
-	return role
-}
-
-func isRoleAllowed(role string, allowedRoles []string) bool {
-	// Check if the user's role is allowed
-	for _, allowedRole := range allowedRoles {
-		if role == allowedRole {
-			return true
-		}
-	}
-	return false
 }
 
 //-----------------------------------------------------------------------------

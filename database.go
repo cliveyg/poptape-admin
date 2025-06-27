@@ -112,34 +112,6 @@ func (a *App) PopulateDatabase() {
 		a.Log.Fatal().Msg("[UserRoles] table not found")
 	}
 
-	//s := "Ibrahima Konaté is stalling on signing a new deal at Liverpool"
-	//a.testEncryptDecrypt(s)
-
-}
-
-func (a *App) testEncryptDecrypt(s string) {
-	key := []byte(os.Getenv("SUPERSECRETKEY"))
-	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
-
-	var es string
-	var err error
-	es, err = utils.Encrypt([]byte(s), key, nonce)
-	if err != nil {
-		a.Log.Error().Msg(err.Error())
-	}
-	a.Log.Debug().Msgf("Encrypted string is [%s]", es)
-	a.Log.Info().Msg("Attempting to decrypt")
-
-	var ba []byte
-	ba, err = utils.Decrypt(es, key, nonce)
-	if err != nil {
-		a.Log.Error().Msg(err.Error())
-	}
-	if s == string(ba) {
-		a.Log.Debug().Msgf("Decrypted string is same as original")
-	} else {
-		a.Log.Debug().Msgf("Error in encryption/decryption process")
-	}
 }
 
 func (a *App) CreateFirstUser() error {
@@ -154,12 +126,12 @@ func (a *App) CreateFirstUser() error {
 		return errors.New("unable to encrypt password")
 	}
 
-	u := &User{
+	u := User{
 		Username: fu,
 		Password: encryptedPW,
 	}
 
-	res := a.DB.Create(u)
+	res := a.DB.Create(&u)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -172,6 +144,7 @@ func (a *App) CreateRoles() error {
 
 	roles := []*Role{
 		{RoleName: "super"},
+		{RoleName: "admin"},
 		{RoleName: "aws"},
 		{RoleName: "items"},
 		{RoleName: "reviews"},
@@ -209,8 +182,8 @@ func (a *App) CreateUserRoles() error {
 	}
 
 	ur := UserRole{
-		AdminId: u.AdminId,
-		RoleId:  r.RoleId,
+		AdminId:  u.AdminId,
+		RoleName: r.RoleName,
 	}
 	res = a.DB.Create(&ur)
 	if res.Error != nil {
