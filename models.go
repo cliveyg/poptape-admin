@@ -1,21 +1,25 @@
 package main
 
 import (
+	"errors"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"os"
 	"time"
 )
 
 //-----------------------------------------------------------------------------
 
 type User struct {
-	AdminId   uuid.UUID `json:"admin_id" gorm:"type:uuid;primary_key;"`
-	Username  string    `json:"username" gorm:"unique"`
-	Password  []byte    `json:"password"`
-	LastLogin time.Time `json:"last_login"`
-	Active    bool      `json:"active"`
-	Validated bool      `json:"validated"`
-	Created   time.Time `json:"created"`
+	AdminId   uuid.UUID      `json:"admin_id" gorm:"type:uuid;primaryKey;"`
+	Username  string         `json:"username" gorm:"unique"`
+	Password  []byte         `json:"-"`
+	LastLogin time.Time      `json:"last_login"`
+	Active    bool           `json:"active"`
+	Validated bool           `json:"validated"`
+	Roles     []Role         `json:"roles" gorm:"many2many:user_role"`
+	Created   time.Time      `json:"created"`
+	Deleted   gorm.DeletedAt `json:"-"`
 }
 
 func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
@@ -26,21 +30,30 @@ func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
 	return
 }
 
+func (u *User) BeforeDelete(_ *gorm.DB) (err error) {
+	if u.Username == os.Getenv("SUPERUSER") {
+		return errors.New("not allowed to delete super user")
+	}
+	u.Active = false
+	return
+}
+
 //-----------------------------------------------------------------------------
+// in theory we can have more than one set of creds per microservice that
+// is why microservice is in a separate table
 
 type Cred struct {
-	CredId         uuid.UUID `json:"cred_id" gorm:"type:uuid;primary_key;"`
-	MicroserviceId string    `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
-	RoleId         string    `json:"role_id" gorm:"foreignKey:RoleId"`
-	DBName         string    `json:"db_name" gorm:"unique"`
-	Type           string    `json:"type"`
-	URL            string    `json:"url"  gorm:"unique"`
-	Port           string    `json:"port"  gorm:"unique"`
-	DBUsername     string    `json:"db_username" gorm:"unique"`
-	DBPassword     string    `json:"db_password"`
-	LastUsed       time.Time `json:"last_used"`
-	LastUsedBy     string    `json:"last_used_by"  gorm:"foreignKey:Username"`
-	Created        time.Time `json:"created"`
+	CredId     uuid.UUID `json:"cred_id" gorm:"type:uuid;primaryKey;" binding:"-"`
+	DBName     string    `json:"db_name" gorm:"unique" binding:"required"`
+	Type       string    `json:"type" binding:"required"`
+	URL        string    `json:"url" gorm:"unique" binding:"required"`
+	Port       string    `json:"port" gorm:"unique" binding:"required"`
+	DBUsername string    `json:"db_username" gorm:"unique" binding:"required"`
+	DBPassword string    `json:"db_password" binding:"required"`
+	LastUsed   time.Time `json:"last_used" binding:"-"`
+	LastUsedBy string    `json:"last_used_by"  gorm:"foreignKey:Username" binding:"-"`
+	CreatedBy  uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId" binding:"-"`
+	Created    time.Time `json:"created" binding:"-"`
 }
 
 func (c *Cred) BeforeCreate(_ *gorm.DB) (err error) {
@@ -52,9 +65,9 @@ func (c *Cred) BeforeCreate(_ *gorm.DB) (err error) {
 //-----------------------------------------------------------------------------
 
 type Microservice struct {
-	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid;primary_key;"`
-	Name           string    `json:"name" gorm:"unique"`
-	RoleId         string    `json:"role_id" gorm:"foreignKey:RoleId"`
+	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid;primaryKey;"`
+	MSName         string    `json:"ms_name" gorm:"unique"`
+	CreatedBy      uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId"`
 	Created        time.Time `json:"created"`
 }
 
@@ -65,15 +78,34 @@ func (m *Microservice) BeforeCreate(_ *gorm.DB) (err error) {
 }
 
 //-----------------------------------------------------------------------------
+// this table links roles to microservices and creds. provides more flexibility
+
+type RoleCredMS struct {
+	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
+	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId"`
+	RoleName       string    `json:"role_name" gorm:"foreignKey:Name"`
+	CreatedBy      uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId"`
+	Created        time.Time `json:"created"`
+}
+
+func (rcm *RoleCredMS) BeforeCreate(_ *gorm.DB) (err error) {
+	rcm.Created = time.Now()
+	return
+}
+
+//-----------------------------------------------------------------------------
 
 type APIPath struct {
-	APIPathId      uuid.UUID `json:"api_path_id" gorm:"type:uuid;primary_key;"`
+	APIPathId      uuid.UUID `json:"api_path_id" gorm:"type:uuid;primaryKey;"`
 	MicroserviceId string    `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
 	Path           string    `json:"path"`
+	CreatedBy      uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId"`
+	Created        time.Time `json:"created"`
 }
 
 func (a *APIPath) BeforeCreate(_ *gorm.DB) (err error) {
 	a.APIPathId = uuid.New()
+	a.Created = time.Now()
 	return
 }
 
@@ -94,22 +126,15 @@ type Signup struct {
 
 //-----------------------------------------------------------------------------
 
-type UserRole struct {
-	AdminId  uuid.UUID `json:"admin_id" gorm:"foreignKey:AdminId"`
-	RoleName string    `json:"role_name" gorm:"foreignKey:RoleName"`
-	Created  time.Time `json:"created"`
-}
-
-func (ur *UserRole) BeforeCreate(_ *gorm.DB) (err error) {
-	ur.Created = time.Now()
-	return
+type RoleName struct {
+	rN string ` binding:"required"`
 }
 
 //-----------------------------------------------------------------------------
 
 type Role struct {
-	RoleName string    `json:"role_name" gorm:"type:string;primary_key;"`
-	Created  time.Time `json:"created"`
+	Name    string    `json:"name" gorm:"type:string;primaryKey"`
+	Created time.Time `json:"-"`
 }
 
 func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
@@ -118,3 +143,11 @@ func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
 }
 
 //-----------------------------------------------------------------------------
+
+type DBTables struct {
+	DBTableId      uuid.UUID `json:"db_table_id" gorm:"type:uuid;primaryKey;"`
+	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId" binding:"required"`
+	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId" binding:"required"`
+	TableDesc      string    `json:"table_description" binding:"required"`
+	TableSQL       string    `json:"table_sql" binding:"required"`
+}

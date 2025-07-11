@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,8 +29,16 @@ func (a *App) checkLoginDetails(l *Login, u *User) error {
 		a.Log.Info().Msgf("User [%s]: not validated", u.Username)
 		return errors.New("user not validated")
 	}
-
-	if !utils.VerifyPassword(l.Password, u.Password) {
+	if !u.Active {
+		a.Log.Info().Msgf("User [%s]: not active", u.Username)
+		return errors.New("user not active")
+	}
+	pass, err := base64.StdEncoding.DecodeString(l.Password)
+	if err != nil {
+		a.Log.Info().Msgf("Base64 decoding failed [%s]", err.Error())
+		return err
+	}
+	if !utils.VerifyPassword(pass, u.Password) {
 		a.Log.Info().Msgf("User [%s]: password incorrect", u.Username)
 		return errors.New("password doesn't match")
 	}
@@ -63,9 +73,9 @@ func (a *App) hasValidJWT(c *gin.Context) bool {
 
 	u := User{Username: claims.Username, AdminId: aId}
 
-	res := a.DB.First(&u)
+	res := a.DB.Preload("Roles").Find(&u)
 	if res.Error != nil {
-		a.Log.Info().Msgf("Failed login attempted with username [%s]", u.Username)
+		a.Log.Info().Msgf("Failed jwt validation with username [%s]", u.Username)
 		a.Log.Error().Msgf("Error: [%s]", res.Error)
 		return false
 	}
@@ -73,28 +83,17 @@ func (a *App) hasValidJWT(c *gin.Context) bool {
 		c.Set("user", u)
 		return true
 	}
-	a.Log.Info().Msgf("Failed login; user [%s] not validated", u.Username)
+	a.Log.Info().Msgf("Failed jwt validation; user [%s] not validated", u.Username)
 	return false
 }
 
 //-----------------------------------------------------------------------------
 
-func (a *App) getUserRoles(u *User, ur *[]UserRole) error {
-
-	res := a.DB.Find(&ur, "admin_id = ?", u.AdminId.String())
-	if res.Error != nil {
-		return res.Error
-	}
-	return nil
-}
-
-//-----------------------------------------------------------------------------
-
-func (a *App) userHasValidRole(roles []UserRole, allowedRoles []string) bool {
+func (a *App) userHasValidRole(roles []Role, allowedRoles []string) bool {
 
 	rf := false
 	for i := 0; i < len(roles); i++ {
-		if slices.Contains(allowedRoles, roles[i].RoleName) {
+		if slices.Contains(allowedRoles, roles[i].Name) {
 			rf = true
 			break
 		}
@@ -130,3 +129,20 @@ func (a *App) testEncryptDecrypt(s string) {
 }
 
 //-----------------------------------------------------------------------------
+
+func (a *App) encryptCredPass(cr *Cred) error {
+	// decode input password, encrypt it and put it back in same field
+	p64, err := base64.StdEncoding.DecodeString(cr.DBPassword)
+	if err != nil {
+		a.Log.Info().Msgf("Base64 decoding failed [%s]", err.Error())
+		return errors.New(fmt.Sprintf("Base64 decoding failed [%s]", err.Error()))
+	}
+	var est string
+	est, err = utils.Encrypt(p64, []byte(os.Getenv("SUPERSECRETKEY")), []byte(os.Getenv("SUPERSECRETNONCE")))
+	if err != nil {
+		a.Log.Info().Msgf("Encryption failed [%s]", err.Error())
+		return errors.New(fmt.Sprintf("Encryption failed [%s]", err.Error()))
+	}
+	cr.DBPassword = est
+	return nil
+}
