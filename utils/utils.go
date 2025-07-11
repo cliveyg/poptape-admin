@@ -25,15 +25,14 @@ type Claims struct {
 
 //-----------------------------------------------------------------------------
 
-func GenerateHashPassword(password string) ([]byte, error) {
-	b, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+func GenerateHashPassword(password []byte) ([]byte, error) {
+	b, err := bcrypt.GenerateFromPassword(password, 14)
 	return b, err
 }
 
 //-----------------------------------------------------------------------------
 
-func VerifyPassword(password string, hashed []byte) bool {
-	bp := []byte(password)
+func VerifyPassword(bp []byte, hashed []byte) bool {
 	err := bcrypt.CompareHashAndPassword(hashed, bp)
 	return err == nil
 }
@@ -123,7 +122,7 @@ func GenerateToken(username string, adminId uuid.UUID) (string, error) {
 
 func ParseToken(ts string) (*Claims, error) {
 
-	log.Info().Msgf("Parsing token string [%s]", ts)
+	log.Debug().Msgf("Parsing token string [%s]", ts)
 
 	token, err := jwt.ParseWithClaims(ts, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("TOKEN_SECRET")), nil

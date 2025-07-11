@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/utils"
@@ -58,9 +59,14 @@ func connectToDB() (*gorm.DB, error) {
 func (a *App) MigrateModels() {
 
 	a.Log.Info().Msg("Migrating models")
-	err := a.DB.AutoMigrate(&User{}, &Role{}, &UserRole{}, &Cred{}, &Microservice{}, &APIPath{})
+	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &APIPath{}, &RoleCredMS{})
 	if err != nil {
-		a.Log.Fatal().Err(err)
+		a.Log.Fatal().Msg(err.Error())
+	}
+	// we have to migrate user separately due to dependencies on other models
+	err = a.DB.AutoMigrate(&User{})
+	if err != nil {
+		a.Log.Fatal().Msg(err.Error())
 	}
 	a.Log.Info().Msg("Models migrated successfully")
 }
@@ -68,28 +74,14 @@ func (a *App) MigrateModels() {
 func (a *App) PopulateDatabase() {
 
 	var err error
-	if a.DB.Migrator().HasTable(&User{}) {
-		if err404 := a.DB.First(&User{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No users found. Creating user")
-			err = a.CreateFirstUser()
-			if err != nil {
-				a.Log.Error().Msg("Unable to create first user")
-				a.Log.Error().Err(err)
-			}
-		} else {
-			a.Log.Info().Msg("[Users] table already populated")
-		}
-	} else {
-		a.Log.Fatal().Msg("[Users] table not found")
-	}
 
 	if a.DB.Migrator().HasTable(&Role{}) {
 		if err404 := a.DB.First(&Role{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msg("No roles found. Creating roles")
 			err = a.CreateRoles()
 			if err != nil {
-				a.Log.Error().Msg("Unable to create roles")
-				a.Log.Error().Err(err)
+				a.Log.Error().Msgf("Unable to create roles [%s]", err.Error())
+				a.Log.Fatal().Msg("Exiting...")
 			}
 		} else {
 			a.Log.Info().Msg("[Roles] table already populated")
@@ -98,97 +90,111 @@ func (a *App) PopulateDatabase() {
 		a.Log.Fatal().Msg("[Roles] table not found")
 	}
 
-	if a.DB.Migrator().HasTable(&UserRole{}) {
-		if err404 := a.DB.First(&UserRole{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No user roles found. Creating user role for first user")
-			err = a.CreateUserRoles()
+	if a.DB.Migrator().HasTable(&User{}) {
+		if err404 := a.DB.First(&User{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("No users found. Creating user")
+			err = a.CreateSuperUser()
 			if err != nil {
-				a.Log.Error().Msgf("Unable to create user roles: [%s]", err.Error())
+				a.Log.Error().Msg("Unable to create first user")
+				a.Log.Fatal().Msg(err.Error())
 			}
 		} else {
-			a.Log.Info().Msg("[UserRoles] table already populated")
+			a.Log.Info().Msg("[Users] table already populated")
 		}
 	} else {
-		a.Log.Fatal().Msg("[UserRoles] table not found")
+		a.Log.Fatal().Msg("[Users] table not found")
 	}
+
+	/*
+		if a.DB.Migrator().HasTable(&UserRole{}) {
+			if err404 := a.DB.First(&UserRole{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
+				a.Log.Info().Msg("No user roles found. Creating user role for superuser")
+				err = a.CreateUserRoles()
+				if err != nil {
+					a.Log.Error().Msgf("Unable to create user roles: [%s]", err.Error())
+				}
+			} else {
+				a.Log.Info().Msg("[UserRoles] table already populated")
+			}
+		} else {
+			a.Log.Fatal().Msg("[UserRoles] table not found")
+		}
+	*/
 
 }
 
-func (a *App) CreateFirstUser() error {
+func (a *App) CreateSuperUser() error {
 
-	fu, fuExists := os.LookupEnv("FIRSTUSER")
-	pw, pwExists := os.LookupEnv("FIRSTPASS")
-	if !fuExists || !pwExists {
-		return errors.New("first user env vars not present in .env")
+	su, suExists := os.LookupEnv("SUPERUSER")
+	pw, pwExists := os.LookupEnv("SUPERPASS")
+	if !suExists || !pwExists {
+		return errors.New("superuser env vars not present in .env")
 	}
-	encryptedPW, err := utils.GenerateHashPassword(pw)
+	var pass []byte
+	// password is base64 encoded
+	pass, err := base64.StdEncoding.DecodeString(pw)
+	if err != nil {
+		a.Log.Info().Msgf("Base64 decoding failed [%s]", err.Error())
+		return err
+	}
+	var epw []byte
+	epw, err = utils.GenerateHashPassword(pass)
 	if err != nil {
 		return errors.New("unable to encrypt password")
 	}
 
-	u := User{
-		Username: fu,
-		Password: encryptedPW,
+	r := Role{Name: "super"}
+	res := a.DB.First(&r)
+	if res.Error != nil {
+		a.Log.Info().Msg("Unable to find 'super' role")
+		return res.Error
 	}
 
-	res := a.DB.Create(&u)
+	u := User{
+		Username: su,
+		Password: epw,
+		Roles:    []Role{r},
+	}
+
+	res = a.DB.Create(&u)
 	if res.Error != nil {
 		return res.Error
 	}
 
+	if os.Getenv("ENVIRONMENT") == "DEV" {
+		u.Validated = true
+		res = a.DB.Save(&u)
+		if res.Error != nil {
+			return res.Error
+		}
+	}
+
 	a.Log.Debug().Msgf("User created; AdminId is [%s]", u.AdminId)
+
 	return nil
 }
 
 func (a *App) CreateRoles() error {
 
-	roles := []*Role{
-		{RoleName: "super"},
-		{RoleName: "admin"},
-		{RoleName: "aws"},
-		{RoleName: "items"},
-		{RoleName: "reviews"},
-		{RoleName: "messages"},
-		{RoleName: "auctionhouse"},
-		{RoleName: "apiserver"},
-		{RoleName: "categories"},
-		{RoleName: "address"},
-		{RoleName: "fotos"},
-		{RoleName: "authy"},
+	roles := []Role{
+		{Name: "super"},
+		{Name: "admin"},
+		{Name: "aws"},
+		{Name: "items"},
+		{Name: "reviews"},
+		{Name: "messages"},
+		{Name: "auctionhouse"},
+		{Name: "apiserver"},
+		{Name: "categories"},
+		{Name: "address"},
+		{Name: "fotos"},
+		{Name: "authy"},
 	}
-	res := a.DB.Create(roles)
+	res := a.DB.Create(&roles)
 	if res.Error != nil {
 		return res.Error
 	}
 
 	a.Log.Info().Msg("Roles created")
-	return nil
-}
-
-func (a *App) CreateUserRoles() error {
-
-	u := User{}
-	res := a.DB.First(&u)
-	if res.Error != nil {
-		return res.Error
-	}
-
-	r := Role{
-		RoleName: "super",
-	}
-	res = a.DB.First(&r)
-	if res.Error != nil {
-		return res.Error
-	}
-
-	ur := UserRole{
-		AdminId:  u.AdminId,
-		RoleName: r.RoleName,
-	}
-	res = a.DB.Create(&ur)
-	if res.Error != nil {
-		return res.Error
-	}
-	a.Log.Info().Msgf("UserRole created for [%s]", u.Username)
 	return nil
 }

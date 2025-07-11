@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -a -ldflags '-w' -o admin
 
 FROM alpine:latest
 
-RUN apk add --no-cache bash curl && \
+RUN apk add --no-cache bash postgresql-client && \
     mkdir -p /admin && \
     mkdir -p /admin/log
 COPY --from=build /app/admin /admin
