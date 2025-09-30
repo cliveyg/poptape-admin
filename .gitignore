@@ -20,3 +20,4 @@
 !utils/utils.go
 !README.md
 !LICENSE
+!aws_handlers.go

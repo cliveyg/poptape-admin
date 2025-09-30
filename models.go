@@ -15,18 +15,37 @@ type User struct {
 	Username  string         `json:"username" gorm:"unique"`
 	Password  []byte         `json:"-"`
 	LastLogin time.Time      `json:"last_login"`
-	Active    bool           `json:"active"`
-	Validated bool           `json:"validated"`
+	Active    bool           `json:"active" binding:"required"`
+	Validated bool           `json:"validated" binding:"required"`
 	Roles     []Role         `json:"roles" gorm:"many2many:user_role"`
 	Created   time.Time      `json:"created"`
+	Updated   time.Time      `json:"updated"`
 	Deleted   gorm.DeletedAt `json:"-"`
 }
 
 func (u *User) BeforeCreate(_ *gorm.DB) (err error) {
 	u.AdminId = uuid.New()
 	u.Created = time.Now()
+	u.Updated = time.Now()
 	u.Active = true
 	u.Validated = false
+	return
+}
+
+func (u *User) BeforeUpdate(tx *gorm.DB) (err error) {
+
+	// if we come from login, update LastLogin
+	// then logic to prevent superuser update
+	// then set Updated field if we come from
+	// anywhere else
+	if _, ok := tx.Get("login"); ok {
+		u.LastLogin = time.Now()
+	} else if u.Username == os.Getenv("SUPERUSER") &&
+		os.Getenv("CREATESUPER") != "y" {
+		return errors.New("not allowed to edit superuser")
+	} else {
+		u.Updated = time.Now()
+	}
 	return
 }
 
@@ -35,6 +54,7 @@ func (u *User) BeforeDelete(_ *gorm.DB) (err error) {
 		return errors.New("not allowed to delete super user")
 	}
 	u.Active = false
+	u.Updated = time.Now()
 	return
 }
 
@@ -64,10 +84,16 @@ func (c *Cred) BeforeCreate(_ *gorm.DB) (err error) {
 
 //-----------------------------------------------------------------------------
 
+type MsIn struct {
+	MSName string `json:"ms_name" binding:"required" gorm:"unique"`
+}
+
+//-----------------------------------------------------------------------------
+
 type Microservice struct {
 	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid;primaryKey;"`
-	MSName         string    `json:"ms_name" gorm:"unique"`
-	CreatedBy      uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId"`
+	MSName         string    `json:"ms_name" binding:"required" gorm:"unique"`
+	CreatedBy      uuid.UUID `json:"created_by" binding:"required" gorm:"foreignKey:AdminId"`
 	Created        time.Time `json:"created"`
 }
 
@@ -122,12 +148,6 @@ type Signup struct {
 	Username        string `json:"username" binding:"required"`
 	Password        string `json:"password" binding:"required"`
 	ConfirmPassword string `json:"confirm_password" binding:"required"`
-}
-
-//-----------------------------------------------------------------------------
-
-type RoleName struct {
-	rN string ` binding:"required"`
 }
 
 //-----------------------------------------------------------------------------
