@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func (a *App) initialiseMiddleWare() {
+func (a *App) InitialiseMiddleWare() {
 	a.Log.Debug().Msg("Initialising middleware")
 	a.Router.Use(a.LoggingMiddleware())
 	a.Router.Use(gin.Recovery())

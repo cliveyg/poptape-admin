@@ -19,25 +19,40 @@ services:
         max-size: "10Mb"
         max-file: "5"
     depends_on:
-      - db
+      - pdb
     networks:
       - poptape
-  db:
+  pdb:
     image: postgres:alpine
     restart: always
     ports:
-      - "1265:5432"
+      - "1265:${POSTGRES_PORT}"
     environment:
-      - "POSTGRES_PASSWORD=${DB_PASSWORD}"
-      - "POSTGRES_USER=${DB_USERNAME}"
-      - "POSTGRES_DB=${DB_NAME}"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_DB: ${POSTGRES_DBNAME}
     volumes:
-      - poptape_admin_data:/var/lib/postgresql/data
+      - poptape_admin_postgres_data:/var/lib/postgresql/data
+    networks:
+      - poptape
+  mdb:
+    image: mongo
+    ports:
+      - "1266:${MONGO_PORT}"
+    restart: always
+    volumes:
+      - poptape_admin_mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DBNAME}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     networks:
       - poptape
 networks:
   poptape:
     external: true
 volumes:
-  poptape_admin_data:
-    name: poptape_admin_data
+  poptape_admin_postgres_data:
+    name: poptape_admin_postgres_data
+  poptape_admin_mongo_data:
+    name: poptape_admin_mongo_data

@@ -7,6 +7,7 @@ import (
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"os"
 	"slices"
 )
@@ -19,7 +20,7 @@ type YHeader struct {
 
 func (a *App) checkLoginDetails(l *Login, u *User) error {
 
-	res := a.DB.First(&u, "username = ?", l.Username)
+	res := a.DB.Preload("Roles").First(&u, "username = ?", l.Username)
 	if res.Error != nil {
 		a.Log.Info().Msgf("Login attempted with user [%s]", l.Username)
 		a.Log.Error().Msgf("Error: [%s]", res.Error)
@@ -51,14 +52,15 @@ func (a *App) checkLoginDetails(l *Login, u *User) error {
 func (a *App) hasValidJWT(c *gin.Context) bool {
 
 	var y YHeader
-	err := c.ShouldBindHeader(&y)
-	if err != nil {
+	var err error
+	if err = c.ShouldBindHeader(&y); err != nil {
 		a.Log.Info().Msg("Missing y-access-token")
 		a.Log.Debug().Msgf("Unable to bind y-access-token header [%s]", err.Error())
 		return false
 	}
 
-	claims, err := utils.ParseToken(y.TokenString)
+	var claims *utils.Claims
+	claims, err = utils.ParseToken(y.TokenString)
 	if err != nil {
 		a.Log.Info().Msgf("Failure to parse token [%s]", err.Error())
 		return false
@@ -144,5 +146,34 @@ func (a *App) encryptCredPass(cr *Cred) error {
 		return errors.New(fmt.Sprintf("Encryption failed [%s]", err.Error()))
 	}
 	cr.DBPassword = est
+	return nil
+}
+
+func (a *App) getRoleDetails(c *gin.Context, u *User, rName *string) error {
+	adminId, err := uuid.Parse(c.Param("aId"))
+	if err != nil {
+		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
+		return err
+	}
+	*rName = c.Param("rName")
+	if len(*rName) > 20 {
+		a.Log.Info().Msg("Role name is too long")
+		return errors.New("role name is too long")
+	}
+
+	u.AdminId = adminId
+	res := a.DB.Preload("Roles").Find(&u)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("User [%s] not found", u.AdminId.String())
+			return res.Error
+		}
+		a.Log.Info().Msgf("Error finding user [%s]", res.Error)
+		return res.Error
+	}
+
+	if u.Username == "" {
+		return errors.New("user not found")
+	}
 	return nil
 }
