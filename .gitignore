@@ -14,7 +14,7 @@
 !Dockerfile
 !routes.go
 !models.go
-!database.go
+!databases.go
 !helpers.go
 !handlers.go
 !utils/utils.go
