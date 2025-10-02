@@ -63,7 +63,7 @@ func (a *App) InitialiseMongo() {
 func (a *App) InitialisePostgres() {
 
 	// due to postgres docker container not starting
-	// up in time even with depends_on we have to keep
+	// up in time even with depends_on set we have to keep
 	// trying to connect. if after 60 secs we still
 	// haven't connected we log fatal and stop
 	timeout := 60 * time.Second

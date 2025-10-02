@@ -153,7 +153,7 @@ type Signup struct {
 //-----------------------------------------------------------------------------
 
 type Role struct {
-	Name    string    `json:"name" gorm:"type:string;primaryKey"`
+	Name    string    `json:"role_name" gorm:"type:string;primaryKey"`
 	Created time.Time `json:"-"`
 }
 
@@ -164,10 +164,14 @@ func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
 
 //-----------------------------------------------------------------------------
 
-type DBTables struct {
-	DBTableId      uuid.UUID `json:"db_table_id" gorm:"type:uuid;primaryKey;"`
+type BackupRecord struct {
+	BackupId       uuid.UUID `json:"backup_id" gorm:"type:uuid;primaryKey;"`
 	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId" binding:"required"`
 	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId" binding:"required"`
-	TableDesc      string    `json:"table_description" binding:"required"`
-	TableSQL       string    `json:"table_sql" binding:"required"`
+	Version        int       `json:"version" binding:"required"`
+	Dataset        int       `json:"dataset"`
+	DataType       string    `json:"data_type" binding:"required"`
+	MongoId        uuid.UUID `json:"mongo_id" binding:"required"`
+	Valid          bool      `json:"valid" binding:"required"`
+	Notes          string    `json:"notes"`
 }
