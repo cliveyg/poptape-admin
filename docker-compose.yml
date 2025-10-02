@@ -10,7 +10,7 @@ services:
     image: poptape/admin/api:v${VERSION}
     ports:
       - "1264:$PORT"
-    restart: always
+    restart: no
     volumes:
      - ${LOCAL_LOG_LOC}:/admin/log
     logging:
@@ -42,6 +42,7 @@ services:
     restart: always
     volumes:
       - poptape_admin_mongo_data:/data/db
+      - /tmp/ignoreme:/data/configdb # this prevents docker creating odd 0 byte volumes
     environment:
       MONGO_INITDB_DATABASE: ${MONGO_DBNAME}
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}

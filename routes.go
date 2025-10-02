@@ -25,7 +25,7 @@ func (a *App) InitialiseRoutes() {
 		a.ListMicroservices(c)
 	})
 
-	// backup specific db and table
+	// backup specific db and table/collection
 	a.Router.GET("/admin/save/:msId/:db/:tab", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.Log.Info().Msg("First path")
 		a.BackupDB(c)
@@ -56,7 +56,17 @@ func (a *App) InitialiseRoutes() {
 
 	// fetch creds for specific cred id
 	a.Router.GET("/admin/creds/:cId", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.FetchCreds(c)
+		a.FetchCredsById(c)
+	})
+
+	// list all creds
+	a.Router.GET("/admin/creds", a.authMiddleware(), a.accessControlMiddleware([]string{"super"}), func(c *gin.Context) {
+		a.ListAllCreds(c)
+	})
+
+	// list all roles
+	a.Router.GET("/admin/roles", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
+		a.ListAllRoles(c)
 	})
 
 	// create user
@@ -89,16 +99,29 @@ func (a *App) InitialiseRoutes() {
 		a.DeleteUser(c)
 	})
 
+	// fetch all users
 	a.Router.GET("/admin/users", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.FetchAllUsers(c)
 	})
 
+	// test route
 	a.Router.GET("/admin/test/pgdump", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.TestRoute(c)
 	})
 
-	a.Router.GET("/admin/aws/:awsId", a.authMiddleware(), a.accessControlMiddleware([]string{"apiserver"}), func(c *gin.Context) {
+	// test route
+	a.Router.GET("/admin/test/access/:msId", a.authAccessTest(), a.accessControlMiddlewareTest([]string{"super", "admin"}), func(c *gin.Context) {
+		a.Testy(c)
+	})
+
+	// get aws deets
+	a.Router.GET("/admin/aws/:awsId", a.authMiddleware(), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.FetchAWSDetails(c)
+	})
+
+	// wipe entire system - use carefully
+	a.Router.GET("/admin/clearall", a.authMiddleware(), a.accessControlMiddleware([]string{"super"}), func(c *gin.Context) {
+		a.SystemWipe(c)
 	})
 
 	a.Router.NoRoute(func(c *gin.Context) {

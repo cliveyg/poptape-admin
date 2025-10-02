@@ -17,7 +17,28 @@ import (
 
 //-----------------------------------------------------------------------------
 
-func (a *App) FetchCreds(c *gin.Context) {
+func (a *App) ListAllCreds(c *gin.Context) {
+	var crds []Cred
+	res := a.DB.Find(&crds)
+	if res.Error != nil {
+		a.Log.Info().Msgf("Error returning creds [%s]", res.Error.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No creds found"})
+		return
+	}
+	for i := range crds {
+		crds[i].DBPassword = "XXXX"
+	}
+	c.JSON(http.StatusOK, gin.H{"creds": crds})
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) FetchCredsById(c *gin.Context) {
+
 	credId, err := uuid.Parse(c.Param("cId"))
 	if err != nil {
 		a.Log.Info().Msgf("Invalid cred id in url [%s]", err.Error())
@@ -32,10 +53,16 @@ func (a *App) FetchCreds(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
 			return
 		}
-		a.Log.Info().Msgf("Error finding creds [%s]", err.Error())
+		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
 		return
 	}
+
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
+		return
+	}
+
 	cr.DBPassword = "XXXXX"
 	c.JSON(http.StatusOK, gin.H{"creds": &cr})
 }
@@ -43,6 +70,7 @@ func (a *App) FetchCreds(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) CreateCreds(c *gin.Context) {
+
 	var cr Cred
 	var msi MsIn
 	var ms Microservice
@@ -66,8 +94,6 @@ func (a *App) CreateCreds(c *gin.Context) {
 	}
 
 	if err = a.encryptCredPass(&cr); err != nil {
-		//err = a.encryptCredPass(&cr)
-		//if err != nil {
 		a.Log.Info().Msgf("%s", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request [4]"})
 		return
@@ -133,6 +159,7 @@ func (a *App) FetchAllUsers(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) FetchUser(c *gin.Context) {
+
 	adminId, err := uuid.Parse(c.Param("aId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
@@ -264,6 +291,7 @@ func (a *App) RemoveRoleFromUser(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) EditUser(c *gin.Context) {
+
 	a.Log.Debug().Msg("Editing user")
 	adminId, err := uuid.Parse(c.Param("aId"))
 	if err != nil {
@@ -317,6 +345,7 @@ func (a *App) EditUser(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) DeleteUser(c *gin.Context) {
+
 	a.Log.Debug().Msg("Deleting user")
 	adminId, err := uuid.Parse(c.Param("aId"))
 	if err != nil {
@@ -338,6 +367,7 @@ func (a *App) DeleteUser(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) CreateUser(c *gin.Context) {
+
 	var su Signup
 	var err error
 	if err = c.ShouldBindJSON(&su); err != nil {
@@ -355,6 +385,7 @@ func (a *App) CreateUser(c *gin.Context) {
 	pass, err = base64.StdEncoding.DecodeString(su.Password)
 	if err != nil {
 		a.Log.Info().Msgf("Base64 decoding failed [%s]", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad base64 encoding"})
 		return
 	}
 	var epw []byte
@@ -391,6 +422,7 @@ func (a *App) CreateUser(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) TestRoute(c *gin.Context) {
+
 	a.Log.Debug().Msg("All valid and in TestRoute")
 
 	// Get password from environment variable
@@ -473,13 +505,20 @@ func (a *App) Login(c *gin.Context) {
 
 //-----------------------------------------------------------------------------
 
+func (a *App) Testy(c *gin.Context) {
+	a.Log.Debug().Msg("In Testy")
+	c.JSON(http.StatusTeapot, gin.H{"message": "Cup of tea?"})
+}
+
+//-----------------------------------------------------------------------------
+
 func (a *App) BackupDB(c *gin.Context) {
 
 	a.Log.Debug().Msg("In BackupDB")
 	var msId uuid.UUID
 	var err error
 	dbName := ""
-	tab := ""
+	tabColl := ""
 	m := c.Query("mode")
 
 	vl := []string{"schema", "all", "data"}
@@ -498,9 +537,9 @@ func (a *App) BackupDB(c *gin.Context) {
 	}
 
 	dbName = c.Param("db")
-	tab = c.Param("tab")
+	tabColl = c.Param("tabColl")
 
-	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tab [%s], mode [%s]", msId.String(), dbName, tab, m)
+	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tabColl [%s], mode [%s]", msId.String(), dbName, tabColl, m)
 	c.JSON(http.StatusTeapot, gin.H{"message": "Moop"})
 
 	ms := Microservice{MicroserviceId: msId}
@@ -515,6 +554,8 @@ func (a *App) BackupDB(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
 		return
 	}
+
+	// got the microservice
 
 }
 
@@ -599,6 +640,43 @@ func (a *App) ListMicroservices(c *gin.Context) {
 		}
 	*/
 	c.JSON(http.StatusOK, gin.H{"microservices": mss})
+
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) ListAllRoles(c *gin.Context) {
+	var mss []Microservice
+	var u User
+	//var vr bool
+	if value, exists := c.Get("user"); exists {
+		u = value.(User)
+	}
+	//vr = a.userHasValidRole(u.Roles, []string{"super", "admin"})
+	a.Log.Info().Interface("User", u).Send()
+	if a.userHasValidRole(u.Roles, []string{"super", "admin"}) {
+		a.Log.Debug().Msg("User has a valid role")
+	}
+
+	res := a.DB.Find(&mss)
+	if res.Error != nil || len(mss) == 0 {
+		a.Log.Info().Msgf("Error finding microservices [%s]", res.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		return
+	}
+
+	if res.RowsAffected == 0 {
+		a.Log.Info().Msgf("No roles found!")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"roles": mss})
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) SystemWipe(c *gin.Context) {
 
 }
 
