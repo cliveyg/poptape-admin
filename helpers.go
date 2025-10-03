@@ -29,7 +29,7 @@ func (a *App) getUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error 
 	}
 	*u, err = uuid.Parse(fmt.Sprintf("%v", idAny))
 	if err != nil {
-		a.Log.Info().Msgf("msIdAny not a uuid string: [%s]", err.Error())
+		a.Log.Info().Msgf("Input not a uuid string: [%s]", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return err
 	}

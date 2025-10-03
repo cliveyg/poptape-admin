@@ -604,7 +604,6 @@ func (a *App) BackupDB(c *gin.Context) {
 			m = fmt.Sprintf("[%s] db saved", dbName)
 		}
 		c.JSON(http.StatusCreated, gin.H{"message": m, "save_id": saveId.String()})
-		// TODO: save to poptape_admin
 		return
 	}
 	if creds.Type == "mongo" {
