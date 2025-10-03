@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -8,12 +9,18 @@ import (
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"io"
 	"os"
+	"os/exec"
 	"time"
 )
+
+//-----------------------------------------------------------------------------
 
 func (a *App) InitialiseMongo() {
 
@@ -57,8 +64,10 @@ func (a *App) InitialiseMongo() {
 	}
 
 	a.Mongo = client
-	a.Log.Info().Msg("Connected to MongoDB successfully")
+	a.Log.Info().Msg("Connected to MongoDB successfully ✓")
 }
+
+//-----------------------------------------------------------------------------
 
 func (a *App) InitialisePostgres() {
 
@@ -85,9 +94,11 @@ func (a *App) InitialisePostgres() {
 		a.Log.Fatal().Msgf("Failed to connect to the database after %s seconds", timeout)
 	}
 
-	a.Log.Info().Msg("Connected to db successfully")
+	a.Log.Info().Msg("Connected to db successfully ✓")
 	a.MigrateModels()
 }
+
+//-----------------------------------------------------------------------------
 
 func connectToPostgres() (*gorm.DB, error) {
 
@@ -105,10 +116,12 @@ func connectToPostgres() (*gorm.DB, error) {
 	return db, nil
 }
 
+//-----------------------------------------------------------------------------
+
 func (a *App) MigrateModels() {
 
 	a.Log.Info().Msg("Migrating models")
-	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &APIPath{}, &RoleCredMS{})
+	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
@@ -117,8 +130,10 @@ func (a *App) MigrateModels() {
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
-	a.Log.Info().Msg("Models migrated successfully")
+	a.Log.Info().Msg("Models migrated successfully ✓")
 }
+
+//-----------------------------------------------------------------------------
 
 func (a *App) PopulatePostgresDB() {
 
@@ -134,7 +149,7 @@ func (a *App) PopulatePostgresDB() {
 				a.Log.Fatal().Msg("Exiting...")
 			}
 		} else {
-			a.Log.Info().Msg("[Roles] table already populated")
+			a.Log.Info().Msg("[Roles] table already populated ✓")
 		}
 	} else {
 		a.Log.Fatal().Msg("[Roles] table not found")
@@ -150,7 +165,7 @@ func (a *App) PopulatePostgresDB() {
 				a.Log.Fatal().Msg(err.Error())
 			}
 		} else {
-			a.Log.Info().Msg("[Users] table already populated")
+			a.Log.Info().Msg("[Users] table already populated ✓")
 		}
 	} else {
 		a.Log.Fatal().Msg("[Users] table not found")
@@ -170,13 +185,15 @@ func (a *App) PopulatePostgresDB() {
 				a.Log.Fatal().Msg("Exiting...")
 			}
 		} else {
-			a.Log.Info().Msg("[Microservices] table already populated")
+			a.Log.Info().Msg("[Microservices] table already populated ✓")
 		}
 	} else {
 		a.Log.Fatal().Msg("[Microservices] table not found")
 	}
 
 }
+
+//-----------------------------------------------------------------------------
 
 func (a *App) CreateSuperUser() (*uuid.UUID, error) {
 
@@ -229,10 +246,12 @@ func (a *App) CreateSuperUser() (*uuid.UUID, error) {
 		}
 	}
 
-	a.Log.Debug().Msgf("User created; AdminId is [%s]", u.AdminId)
+	a.Log.Debug().Msgf("User created; AdminId is [%s] ✓", u.AdminId)
 
 	return &u.AdminId, nil
 }
+
+//-----------------------------------------------------------------------------
 
 func (a *App) CreateRoles() error {
 
@@ -255,9 +274,11 @@ func (a *App) CreateRoles() error {
 		return res.Error
 	}
 
-	a.Log.Info().Msg("Roles created")
+	a.Log.Info().Msg("Roles created ✓")
 	return nil
 }
+
+//-----------------------------------------------------------------------------
 
 func (a *App) CreateMicroservices(aId uuid.UUID) error {
 
@@ -278,6 +299,142 @@ func (a *App) CreateMicroservices(aId uuid.UUID) error {
 		return res.Error
 	}
 
-	a.Log.Info().Msg("Microservices created")
+	a.Log.Info().Msg("Microservices created ✓")
 	return nil
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID) error {
+
+	key := []byte(os.Getenv("SUPERSECRETKEY"))
+	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
+	pw, err := utils.Decrypt(creds.DBPassword, key, nonce)
+	if err != nil {
+		a.Log.Info().Msgf("Error decrypting password from creds [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully decrypted password ✓")
+
+	mdb := a.Mongo.Database(db)
+	bucket, err := gridfs.NewBucket(mdb)
+	if err != nil {
+		return err
+	}
+	a.Log.Debug().Msg("Successfully created bucket ✓")
+
+	dso := ""
+	if mode == "schema" {
+		dso = "--schema-only"
+	} else if mode == "data" {
+		dso = "--data-only"
+	}
+
+	tab := ""
+	if table != "" {
+		tab = "--table " + table
+	}
+
+	args := []string{
+		"-h", creds.Host,
+		"-U", creds.DBUsername,
+		"-p", creds.DBPort,
+		tab,
+		dso,
+		creds.DBName,
+	}
+
+	cmd := exec.Command("pg_dump", args...)
+	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
+
+	var stdout, stderr io.ReadCloser
+	stdout, err = cmd.StdoutPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error from StdoutPipe [%s]", err.Error())
+		return err
+	}
+
+	stderr, err = cmd.StderrPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error from StderrPipe [%s]", err.Error())
+		return err
+	}
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			a.Log.Info().Msgf("[pg_dump stderr] %s", scanner.Text())
+		}
+	}()
+
+	if err = cmd.Start(); err != nil {
+		a.Log.Info().Msgf("Error starting cmd [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully started cmd ✓")
+
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("%s_%s.sql", msId.String(), timestamp)
+	var uploadStream *gridfs.UploadStream
+	uploadStream, err = bucket.OpenUploadStream(
+		filename,
+		options.GridFSUpload().SetMetadata(map[string]interface{}{
+			"created_at": time.Now(),
+			"created_by": u.AdminId.String(),
+			"saveId":     saveId.String(),
+			"msId":       msId.String(),
+			"mode":       mode,
+		}),
+	)
+	if err != nil {
+		a.Log.Info().Msgf("Error opening upload stream [%s]", err.Error())
+		return err
+	}
+	defer uploadStream.Close()
+	a.Log.Debug().Msg("Successfully opened upload stream ✓")
+
+	if _, err = io.Copy(uploadStream, stdout); err != nil {
+		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
+		return err
+	}
+	if err = cmd.Wait(); err != nil {
+		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully streamed data to mongo ✓")
+
+	sr := SaveRecord{
+		SaveId:         *saveId,
+		MicroserviceId: *msId,
+		CredId:         creds.CredId,
+		SavedBy:        u.Username,
+		Dataset:        0,
+		Mode:           mode,
+		Valid:          true,
+	}
+
+	if err = a.SaveWithAutoVersion(&sr); err != nil {
+		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
+
+	return nil
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) SaveWithAutoVersion(rec *SaveRecord) error {
+	return a.DB.Transaction(func(tx *gorm.DB) error {
+		var maxVersion int
+		err := tx.Model(&SaveRecord{}).
+			Where("microservice_id = ?", rec.MicroserviceId).
+			Select("COALESCE(MAX(version), 0)").
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Scan(&maxVersion).Error
+		if err != nil {
+			return err
+		}
+		rec.Version = maxVersion + 1
+		return tx.Create(rec).Error
+	})
 }

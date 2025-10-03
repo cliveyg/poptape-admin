@@ -65,9 +65,10 @@ func (u *User) BeforeDelete(_ *gorm.DB) (err error) {
 type Cred struct {
 	CredId     uuid.UUID `json:"cred_id" gorm:"type:uuid;primaryKey;" binding:"-"`
 	DBName     string    `json:"db_name" gorm:"unique" binding:"required"`
+	Host       string    `json:"host" binding:"required"`
 	Type       string    `json:"type" binding:"required"`
 	URL        string    `json:"url" gorm:"unique" binding:"required"`
-	Port       string    `json:"port" gorm:"unique" binding:"required"`
+	DBPort     string    `json:"db_port" gorm:"unique" binding:"required"`
 	DBUsername string    `json:"db_username" gorm:"unique" binding:"required"`
 	DBPassword string    `json:"db_password" binding:"required"`
 	LastUsed   time.Time `json:"last_used" binding:"-"`
@@ -105,6 +106,8 @@ func (m *Microservice) BeforeCreate(_ *gorm.DB) (err error) {
 
 //-----------------------------------------------------------------------------
 // this table links roles to microservices and creds. provides more flexibility
+// TODO: Refactor the whole role/cred/microservice models thing. not sure they need
+// TODO: to be separate
 
 type RoleCredMS struct {
 	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
@@ -116,22 +119,6 @@ type RoleCredMS struct {
 
 func (rcm *RoleCredMS) BeforeCreate(_ *gorm.DB) (err error) {
 	rcm.Created = time.Now()
-	return
-}
-
-//-----------------------------------------------------------------------------
-
-type APIPath struct {
-	APIPathId      uuid.UUID `json:"api_path_id" gorm:"type:uuid;primaryKey;"`
-	MicroserviceId string    `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
-	Path           string    `json:"path"`
-	CreatedBy      uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId"`
-	Created        time.Time `json:"created"`
-}
-
-func (a *APIPath) BeforeCreate(_ *gorm.DB) (err error) {
-	a.APIPathId = uuid.New()
-	a.Created = time.Now()
 	return
 }
 
@@ -164,14 +151,20 @@ func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
 
 //-----------------------------------------------------------------------------
 
-type BackupRecord struct {
-	BackupId       uuid.UUID `json:"backup_id" gorm:"type:uuid;primaryKey;"`
+type SaveRecord struct {
+	SaveId         uuid.UUID `json:"save_id" gorm:"type:uuid;primaryKey;"`
 	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId" binding:"required"`
 	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId" binding:"required"`
+	SavedBy        string    `json:"savedBy" binding:"required"`
 	Version        int       `json:"version" binding:"required"`
 	Dataset        int       `json:"dataset"`
-	DataType       string    `json:"data_type" binding:"required"`
-	MongoId        uuid.UUID `json:"mongo_id" binding:"required"`
+	Mode           string    `json:"mode" binding:"required"`
 	Valid          bool      `json:"valid" binding:"required"`
 	Notes          string    `json:"notes"`
+	Created        time.Time `json:"-"`
+}
+
+func (s *SaveRecord) BeforeCreate(_ *gorm.DB) (err error) {
+	s.Created = time.Now()
+	return
 }

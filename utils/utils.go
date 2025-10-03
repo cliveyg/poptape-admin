@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -153,4 +154,17 @@ func StructToMap(obj interface{}) map[string]interface{} {
 		mp[fieldName] = fieldValue
 	}
 	return mp
+}
+
+//-----------------------------------------------------------------------------
+
+func ValidDataInput(inSt string) error {
+	var validName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	if !validName.MatchString(inSt) {
+		return errors.New("invalid data input - incorrect chars")
+	}
+	if len(inSt) > 30 || len(inSt) < 4 {
+		return errors.New("invalid data input - too long")
+	}
+	return nil
 }

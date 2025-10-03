@@ -54,7 +54,7 @@ func main() {
 	// create log
 	logger := zerolog.New(cw).With().Timestamp().Caller().Logger()
 	logger.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-")
-	logger.Info().Msg("Logging setup successfully")
+	logger.Info().Msg("Logging setup successfully ✓")
 	if os.Getenv("LOGLEVEL") == "debug" {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else if os.Getenv("LOGLEVEL") == "info" {

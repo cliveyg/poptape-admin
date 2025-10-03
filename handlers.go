@@ -81,6 +81,11 @@ func (a *App) CreateCreds(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request [1]"})
 		return
 	}
+	if cr.Type != "postgres" && cr.Type != "mongo" {
+		a.Log.Info().Msgf("Incorrect db type")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request; Incorrect db type"})
+		return
+	}
 	if err = c.ShouldBindBodyWith(&msi, binding.JSON); err != nil {
 		a.Log.Info().Msgf("Unable to bind to microservice struct: [%s]", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request [2]"})
@@ -141,7 +146,7 @@ func (a *App) CreateCreds(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) FetchAllUsers(c *gin.Context) {
-	//TODO pagination
+	// TODO pagination? - not sure it needs it tbh
 	var users []User
 	res := a.DB.Preload("Roles").Find(&users)
 	if res.Error != nil {
@@ -515,47 +520,99 @@ func (a *App) Testy(c *gin.Context) {
 func (a *App) BackupDB(c *gin.Context) {
 
 	a.Log.Debug().Msg("In BackupDB")
-	var msId uuid.UUID
-	var err error
 	dbName := ""
 	tabColl := ""
-	m := c.Query("mode")
+	mode := c.Query("mode")
 
 	vl := []string{"schema", "all", "data"}
-	a.Log.Debug().Msgf("Mode is [%s]", m)
-	if !slices.Contains(vl, m) {
+	if !slices.Contains(vl, mode) {
 		a.Log.Info().Msg("Invalid mode value")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
 
-	msId, err = uuid.Parse(c.Param("msId"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
+	if err := utils.ValidDataInput(c.Param("db")); err != nil {
+		a.Log.Info().Msg("Invalid data input for db param")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid data input for db param"})
+		return
+	}
+	if err := utils.ValidDataInput(c.Param("tab")); err != nil {
+		a.Log.Info().Msg("Invalid data input for table/collection param")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid data input for table/collection param"})
+		return
+	}
+	dbName = c.Param("db")
+	tabColl = c.Param("tab")
+
+	// we should already have the msId and credId from the auth/access middleware
+	var credId uuid.UUID
+	if err := a.getUUIDFromParams(c, &credId, "cred_id"); err != nil {
+		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Error getting uuid from cred param"})
+		return
+	}
+	var msId uuid.UUID
+	if err := a.getUUIDFromParams(c, &msId, "ms_id"); err != nil {
+		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Error getting uuid from ms param"})
 		return
 	}
 
-	dbName = c.Param("db")
-	tabColl = c.Param("tabColl")
+	a.Log.Debug().Msgf("Input vars are: credId [%s], db [%s], tabColl [%s], mode [%s]", credId.String(), dbName, tabColl, mode)
 
-	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tabColl [%s], mode [%s]", msId.String(), dbName, tabColl, m)
-	c.JSON(http.StatusTeapot, gin.H{"message": "Moop"})
-
-	ms := Microservice{MicroserviceId: msId}
-	res := a.DB.First(&ms, msId)
+	creds := Cred{CredId: credId}
+	res := a.DB.First(&creds, credId)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msgf("Microservice [%s] not found", msId.String())
-			c.JSON(http.StatusNotFound, gin.H{"message": "Microservice not found"})
+			a.Log.Info().Msgf("Creds [%s] not found", credId.String())
+			c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
 			return
 		}
-		a.Log.Info().Msgf("Error finding microservice [%s]", res.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
 		return
 	}
 
-	// got the microservice
+	if res.RowsAffected == 0 {
+		a.Log.Info().Msgf("Creds [%s] not found", credId.String())
+		c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
+		return
+	}
+	if dbName != creds.DBName {
+		a.Log.Info().Msgf("DB name [%s] is incorrect", dbName)
+		c.JSON(http.StatusNotFound, gin.H{"message": "DB name is invalid"})
+		return
+	}
+
+	var i interface{}
+	i, _ = c.Get("user")
+	u := i.(User)
+	// as getting consumes the resource we have to reset it
+	c.Set("user", u)
+	saveId := uuid.New()
+
+	if creds.Type == "postgres" {
+		if err := a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
+			a.Log.Info().Msgf("Error backing up db [%s]", res.Error.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up"})
+			return
+		}
+		var m string
+		if tabColl != "" {
+			m = fmt.Sprintf("Table [%s] from [%s] db saved", tabColl, dbName)
+		} else {
+			m = fmt.Sprintf("[%s] db saved", dbName)
+		}
+		c.JSON(http.StatusCreated, gin.H{"message": m, "save_id": saveId.String()})
+		// TODO: save to poptape_admin
+		return
+	}
+	if creds.Type == "mongo" {
+		c.JSON(http.StatusTeapot, gin.H{"message": "Mongie!"})
+		return
+	}
+
+	c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "Something's not right"})
 
 }
 
