@@ -8,12 +8,32 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"net/http"
 	"os"
 	"slices"
 )
 
 type YHeader struct {
 	TokenString string `header:"y-access-token" binding:"required"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) getUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error {
+
+	var err error
+	idAny, _ := c.Get(key)
+	if idAny == nil {
+		a.Log.Info().Msgf("Key [%s] is missing", key)
+		return errors.New("key is missing")
+	}
+	*u, err = uuid.Parse(fmt.Sprintf("%v", idAny))
+	if err != nil {
+		a.Log.Info().Msgf("Input not a uuid string: [%s]", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+		return err
+	}
+	return nil
 }
 
 //-----------------------------------------------------------------------------
