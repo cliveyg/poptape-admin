@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -8,11 +9,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"gorm.io/gorm"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
 )
 
 //-----------------------------------------------------------------------------
@@ -21,12 +27,13 @@ func (a *App) ListAllCreds(c *gin.Context) {
 	var crds []Cred
 	res := a.DB.Find(&crds)
 	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("No creds found")
+			c.JSON(http.StatusNotFound, gin.H{"message": "No creds found"})
+			return
+		}
 		a.Log.Info().Msgf("Error returning creds [%s]", res.Error.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
-		return
-	}
-	if res.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"message": "No creds found"})
 		return
 	}
 	for i := range crds {
@@ -39,12 +46,18 @@ func (a *App) ListAllCreds(c *gin.Context) {
 
 func (a *App) FetchCredsById(c *gin.Context) {
 
-	credId, err := uuid.Parse(c.Param("cId"))
-	if err != nil {
-		a.Log.Info().Msgf("Invalid cred id in url [%s]", err.Error())
+	//credId, err := uuid.Parse(c.Param("cId"))
+	if !utils.IsValidUUID(c.Param("cId")) {
+		a.Log.Info().Msg("Invalid cred id in url")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
+	credId := c.Param("cId")
+	//if err != nil {
+	//	a.Log.Info().Msgf("Invalid cred id in url [%s]", err.Error())
+	//	c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+	//	return
+	//}
 	cr := Cred{}
 	res := a.DB.First(&cr, credId)
 	if res.Error != nil {
@@ -55,11 +68,6 @@ func (a *App) FetchCredsById(c *gin.Context) {
 		}
 		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
-		return
-	}
-
-	if res.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
 		return
 	}
 
@@ -427,47 +435,7 @@ func (a *App) CreateUser(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) TestRoute(c *gin.Context) {
-
 	a.Log.Debug().Msg("All valid and in TestRoute")
-
-	// Get password from environment variable
-	pgPassword := os.Getenv("POPTAPE_REVIEW_PASSWORD")
-	if pgPassword == "" {
-		a.Log.Info().Msg("Environment variable POPTAPE_REVIEW_PASSWORD is not set")
-		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "Environment variable not set"})
-		return
-	}
-
-	// pg_dump command arguments
-	args := []string{
-		"-h", "poptape-reviews-db-1", // Host (container name or IP)
-		"-U", "poptape_reviews", // Username
-		"-p", "5432",
-		"poptape_reviews", // Database name
-	}
-
-	cmd := exec.Command("pg_dump", args...)
-	cmd.Env = append(os.Environ(), "PGPASSWORD="+pgPassword)
-
-	// Optional: Output the result to a file
-	outFile, err := os.Create("dump.sql")
-	if err != nil {
-		a.Log.Info().Msgf("Error creating dump file [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating dump file"})
-		return
-	}
-	defer outFile.Close()
-	cmd.Stdout = outFile
-
-	// Run the command
-	if err := cmd.Run(); err != nil {
-		a.Log.Info().Msgf("pg_dump failed [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "pg_dump failed"})
-		return
-	}
-
-	a.Log.Info().Msg("Database dumped successfully to dump.sql")
-
 	c.Header("y-access-token", c.GetString("token"))
 	c.JSON(http.StatusOK, gin.H{"message": "meeeep!"})
 }
@@ -520,80 +488,26 @@ func (a *App) Testy(c *gin.Context) {
 func (a *App) BackupDB(c *gin.Context) {
 
 	a.Log.Debug().Msg("In BackupDB")
+
+	saveId := uuid.New()
+	var msId uuid.UUID
+	var err error
+	var statusCode int
+	var creds Cred
+	var u User
 	dbName := ""
 	tabColl := ""
-	mode := c.Query("mode")
+	mode := ""
 
-	vl := []string{"schema", "all", "data"}
-	if !slices.Contains(vl, mode) {
-		a.Log.Info().Msg("Invalid mode value")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+	statusCode, err = a.prepSaveRestore(c, &dbName, &tabColl, &mode, &creds, &u, &msId)
+	if err != nil {
+		c.JSON(statusCode, gin.H{"message": err.Error()})
 		return
 	}
-
-	if err := utils.ValidDataInput(c.Param("db")); err != nil {
-		a.Log.Info().Msg("Invalid data input for db param")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid data input for db param"})
-		return
-	}
-	if err := utils.ValidDataInput(c.Param("tab")); err != nil {
-		a.Log.Info().Msg("Invalid data input for table/collection param")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid data input for table/collection param"})
-		return
-	}
-	dbName = c.Param("db")
-	tabColl = c.Param("tab")
-
-	// we should already have the msId and credId from the auth/access middleware
-	var credId uuid.UUID
-	if err := a.getUUIDFromParams(c, &credId, "cred_id"); err != nil {
-		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Error getting uuid from cred param"})
-		return
-	}
-	var msId uuid.UUID
-	if err := a.getUUIDFromParams(c, &msId, "ms_id"); err != nil {
-		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Error getting uuid from ms param"})
-		return
-	}
-
-	a.Log.Debug().Msgf("Input vars are: credId [%s], db [%s], tabColl [%s], mode [%s]", credId.String(), dbName, tabColl, mode)
-
-	creds := Cred{CredId: credId}
-	res := a.DB.First(&creds, credId)
-	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msgf("Creds [%s] not found", credId.String())
-			c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
-			return
-		}
-		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
-		return
-	}
-
-	if res.RowsAffected == 0 {
-		a.Log.Info().Msgf("Creds [%s] not found", credId.String())
-		c.JSON(http.StatusNotFound, gin.H{"message": "Creds not found"})
-		return
-	}
-	if dbName != creds.DBName {
-		a.Log.Info().Msgf("DB name [%s] is incorrect", dbName)
-		c.JSON(http.StatusNotFound, gin.H{"message": "DB name is invalid"})
-		return
-	}
-
-	var i interface{}
-	i, _ = c.Get("user")
-	u := i.(User)
-	// as getting consumes the resource we have to reset it
-	c.Set("user", u)
-	saveId := uuid.New()
 
 	if creds.Type == "postgres" {
 		if err := a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
-			a.Log.Info().Msgf("Error backing up db [%s]", res.Error.Error())
+			a.Log.Info().Msgf("Error backing up db [%s]", err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up"})
 			return
 		}
@@ -622,62 +536,100 @@ func (a *App) RestoreDB(c *gin.Context) {
 	a.Log.Debug().Msg("In RestoreDB")
 	var msId uuid.UUID
 	var err error
+	var statusCode int
+	var creds Cred
+	var u User
 	dbName := ""
-	tab := ""
-	/*
-		type Params struct {
-			mode string `form:"mode"`
-		}
-		// by default we select all; which is both db schema and data
-		var m Params
-		if err := c.ShouldBind(&m); err != nil {
-			a.Log.Info().Msgf("error fetching querystring [%s]", err.Error())
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-			return
-		}
+	tabColl := ""
+	mode := ""
 
-	*/
-	m := c.Query("mode")
-
-	vl := []string{"schema", "all", "data"}
-	a.Log.Debug().Msgf("Mode is [%s]", m)
-	if !slices.Contains(vl, m) {
-		a.Log.Info().Msg("Invalid mode value")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-		return
-	}
-
-	msId, err = uuid.Parse(c.Param("msId"))
+	statusCode, err = a.prepSaveRestore(c, &dbName, &tabColl, &mode, &creds, &u, &msId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
+		c.JSON(statusCode, gin.H{"message": err.Error()})
 		return
 	}
 
-	dbName = c.Param("db")
-	tab = c.Param("tab")
-
-	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tab [%s], mode [%s]", msId.String(), dbName, tab, m)
+	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tab [%s], mode [%s]", msId.String(), dbName, tabColl, mode)
 	c.JSON(http.StatusTeapot, gin.H{"message": "Moop"})
 
 }
 
 //-----------------------------------------------------------------------------
 
+//goland:noinspection GoErrorStringFormat
+func (a *App) prepSaveRestore(c *gin.Context, dbName, tabColl, mode *string, creds *Cred, u *User, msId *uuid.UUID) (int, error) {
+
+	*mode = c.Query("mode")
+
+	vl := []string{"schema", "all", "data"}
+	if !slices.Contains(vl, *mode) {
+		a.Log.Info().Msg("Invalid mode value")
+		return http.StatusBadRequest, errors.New("Invalid mode value")
+	}
+
+	if err := utils.ValidDataInput(c.Param("db")); err != nil {
+		a.Log.Info().Msg("Invalid data input for db param")
+		return http.StatusBadRequest, errors.New("Invalid data input for db param")
+	}
+
+	if err := utils.ValidDataInput(c.Param("tab")); err != nil {
+		a.Log.Info().Msg("Invalid data input for table/collection param")
+		return http.StatusBadRequest, errors.New("Invalid data input for table/collection param")
+	}
+	*dbName = c.Param("db")
+	*tabColl = c.Param("tab")
+
+	// we should already have the msId and credId from the auth/access middleware
+	var credId uuid.UUID
+	if err := a.getUUIDFromParams(c, &credId, "cred_id"); err != nil {
+		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
+		return http.StatusBadRequest, errors.New("Error getting uuid from cred param")
+	}
+	if err := a.getUUIDFromParams(c, msId, "ms_id"); err != nil {
+		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
+		return http.StatusBadRequest, errors.New("Error getting uuid from ms param")
+	}
+
+	a.Log.Debug().Msgf("Input vars are: credId [%s], db [%s], tabColl [%s], mode [%s]", credId.String(), *dbName, *tabColl, *mode)
+
+	creds.CredId = credId
+	res := a.DB.First(&creds, credId)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("Creds [%s] not found", credId.String())
+			return http.StatusNotFound, errors.New("Creds not found")
+		}
+		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
+		return http.StatusInternalServerError, errors.New("Something went pop")
+	}
+
+	if *dbName != creds.DBName {
+		a.Log.Info().Msgf("DB name [%s] is incorrect", dbName)
+		return http.StatusNotFound, errors.New("DB name is invalid")
+	}
+
+	var i interface{}
+	i, _ = c.Get("user")
+	*u = i.(User)
+	// as getting consumes the resource we have to reset it
+	c.Set("user", u)
+
+	return http.StatusOK, nil
+}
+
 func (a *App) ListMicroservices(c *gin.Context) {
+
 	var mss []Microservice
 	var u User
-	//var vr bool
 	if value, exists := c.Get("user"); exists {
 		u = value.(User)
 	}
-	//vr = a.userHasValidRole(u.Roles, []string{"super", "admin"})
 	a.Log.Info().Interface("User", u).Send()
 	if a.userHasValidRole(u.Roles, []string{"super", "admin"}) {
 		a.Log.Debug().Msg("User has a valid role")
 	}
 
-	res := a.DB.Find(&mss)
+	res := a.DB.Order("ms_name asc").Find(&mss)
 	if res.Error != nil || len(mss) == 0 {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) || len(mss) == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"message": "No microservices found"})
@@ -688,13 +640,6 @@ func (a *App) ListMicroservices(c *gin.Context) {
 		return
 	}
 
-	/*
-		var msma map[string]map[string]interface{}
-		for i := 0; i < len(mss); i++ {
-			mp := utils.StructToMap(mss[i])
-			msma["k"+string(rune(i))] = mp
-		}
-	*/
 	c.JSON(http.StatusOK, gin.H{"microservices": mss})
 
 }
@@ -702,38 +647,348 @@ func (a *App) ListMicroservices(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) ListAllRoles(c *gin.Context) {
-	var mss []Microservice
+	var roles []Role
 	var u User
-	//var vr bool
 	if value, exists := c.Get("user"); exists {
 		u = value.(User)
 	}
-	//vr = a.userHasValidRole(u.Roles, []string{"super", "admin"})
 	a.Log.Info().Interface("User", u).Send()
 	if a.userHasValidRole(u.Roles, []string{"super", "admin"}) {
 		a.Log.Debug().Msg("User has a valid role")
 	}
 
-	res := a.DB.Find(&mss)
-	if res.Error != nil || len(mss) == 0 {
+	res := a.DB.Find(&roles)
+	if res.Error != nil || len(roles) == 0 {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("Microservice table is empty!")
+			c.JSON(http.StatusNotFound, gin.H{"message": "No microservices found"})
+			return
+		}
 		a.Log.Info().Msgf("Error finding microservices [%s]", res.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
 		return
 	}
 
-	if res.RowsAffected == 0 {
-		a.Log.Info().Msgf("No roles found!")
+	c.JSON(http.StatusOK, gin.H{"roles": roles})
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
+
+	// TODO: Pagination?
+
+	var msId uuid.UUID
+	if err := a.getUUIDFromParams(c, &msId, "ms_id"); err != nil {
+		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Microservice id is invalid"})
+	}
+
+	var saves []SaveRecord
+	var res *gorm.DB
+	// look for querystring valid= if not there then return all valid
+	// and invalid records
+	validStr := c.Query("valid")
+	if validStr != "" {
+		vl := []string{"true", "false"}
+		if !slices.Contains(vl, validStr) {
+			a.Log.Info().Msg("Value of 'valid' querystring is invalid")
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Value of 'valid' querystring is invalid"})
+			return
+		}
+		v, _ := strconv.ParseBool(validStr)
+		res = a.DB.Where(map[string]interface{}{"microservice_id": msId.String(), "valid": v}).Order("created desc").Find(&saves)
+	} else {
+		res = a.DB.Where("microservice_id = ?", msId.String()).Order("created desc").Find(&saves)
+	}
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("No saves found")
+			c.JSON(http.StatusNotFound, gin.H{"message": "No saves found"})
+			return
+		}
+		a.Log.Info().Msgf("Error returning saves [%s]", res.Error.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"saves": saves})
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) RestoreDBBySaveId(c *gin.Context) {
+
+	if !utils.IsValidUUID(c.Param("saveId")) {
+		a.Log.Info().Msg("Invalid saveId in url")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Not a uuid string"})
+		return
+	}
+	saveId, _ := uuid.Parse(c.Param("saveId"))
+	svRec := SaveRecord{
+		SaveId: saveId,
+	}
+	res := a.DB.First(&svRec)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("Record not found for save id [%s]", saveId)
+			c.JSON(http.StatusNotFound, gin.H{"message": "RoleCredMS record not found"})
+			return
+		}
+		a.Log.Info().Msgf("Error finding SaveRecord [%s]", res.Error.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went whump"})
+		return
+	}
+	a.Log.Debug().Msg("Found SaveRecord ✓")
+
+	var i interface{}
+	i, _ = c.Get("user")
+	u := i.(User)
+	c.Set("user", u)
+
+	sc, err := a.userHasCorrectAccess(&svRec, &u)
+	if err != nil {
+		c.JSON(sc, gin.H{"message": err.Error()})
+		return
+	}
+
+	a.Log.Debug().Msgf("User [%s] has correct access ✓", u.Username)
+
+	db := a.Mongo.Database(svRec.DBName)
+	collection := db.Collection("fs.files")
+	var fileDoc bson.M
+	ctx := c.Request.Context()
+	err = collection.FindOne(ctx, bson.M{"metadata.save_id": svRec.SaveId.String()}).Decode(&fileDoc)
+	if err != nil {
+		a.Log.Info().Msgf("File not found for save_id %s: %s", svRec.SaveId.String(), err)
+		c.JSON(http.StatusNotFound, gin.H{"message": "File not found for save id in mongo"})
+		return
+	}
+	a.Log.Debug().Msg("Found document in mongo ✓")
+	fileID, ok := fileDoc["_id"].(primitive.ObjectID)
+	if !ok {
+		a.Log.Info().Msgf("File _id is not ObjectID (got %T)", fileDoc["_id"])
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "File _id is not ObjectID"})
+		return
+	}
+
+	var bucket *gridfs.Bucket
+	bucket, err = gridfs.NewBucket(db)
+	if err != nil {
+		a.Log.Info().Msgf("gridfs.NewBucket error: %s", err)
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "gridfs.NewBucket error"})
+		return
+	}
+	a.Log.Debug().Msg("Created bucket ✓")
+
+	downloadStream, err := bucket.OpenDownloadStream(fileID)
+	if err != nil {
+		a.Log.Info().Msgf("OpenDownloadStream error: %s", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "OpenDownloadStream error"})
+		return
+	}
+	defer downloadStream.Close()
+	a.Log.Debug().Msg("OpenDownloadStream success ✓")
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+
+	crdRec := Cred{
+		CredId: svRec.CredId,
+	}
+
+	res = a.DB.First(&crdRec)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("Record not found for cred id [%s]", crdRec.CredId.String())
+			c.JSON(http.StatusNotFound, gin.H{"message": "Cred record not found"})
+			return
+		}
+		a.Log.Info().Msgf("Error finding Cred [%s]", res.Error.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went whump"})
+		return
+	}
+	key := []byte(os.Getenv("SUPERSECRETKEY"))
+	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
+	var pw []byte
+	pw, err = utils.Decrypt(crdRec.DBPassword, key, nonce)
+	if err != nil {
+		a.Log.Info().Msgf("Error decrypting password from creds [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plop"})
+		return
+	}
+
+	if svRec.Mode == "schema" || svRec.Mode == "all" {
+		if svRec.Table != "" {
+			dc := fmt.Sprintf("DROP TABLE %s", svRec.Table)
+			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+				return
+			} else {
+				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
+			}
+		} else {
+			// all tables
+			var tabs []string
+			tabs, err = a.listTables(&crdRec, &pw)
+			if err != nil {
+				a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+				return
+			}
+			for _, table := range tabs {
+				// index is the index where we are
+				// element is the element from someSlice for where we are
+				a.Log.Debug().Msgf("Table is [%s]", table)
+				dc := fmt.Sprintf("DROP TABLE %s", table)
+				_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+					return
+				} else {
+					a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
+				}
+			}
+
+		}
+
+	} else if svRec.Mode == "data" {
+		// remove all existing records from 1 table
+		if svRec.Table != "" {
+			dc := fmt.Sprintf("DELETE FROM %s;", svRec.Table)
+			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+			if err != nil {
+				//a.Log.Info().Msgf("Error writing sql out [%s]", res.Error.Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+				return
+			} else {
+				a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
+			}
+		} else {
+			// remove all recs from all tables
+			var tabs []string
+			tabs, err = a.listTables(&crdRec, &pw)
+			if err != nil {
+				a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+				return
+			}
+			errFound := false
+			for _, table := range tabs {
+				// TODO: put in one transaction
+				a.Log.Debug().Msgf("Table is [%s]", table)
+				dc := fmt.Sprintf("DELETE FROM %s;", table)
+				_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+					return
+				} else {
+					a.Log.Debug().Msgf("Successfully deleted from tables [%s] ✓", table)
+				}
+			}
+			if errFound {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went kerching"})
+				return
+			}
+		}
+
+	}
+
+	// build psql arguments
+	args := []string{
+		"-h", crdRec.Host,
+		"-U", crdRec.DBUsername,
+		"-p", crdRec.DBPort,
+		"-d", crdRec.DBName,
+		"-f", "-",
+		"-v", "ON_ERROR_STOP=1",
+	}
+	a.Log.Debug().Msgf("args is <<%s>>", args)
+	cmd := exec.Command("psql", args...)
+	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
+	a.Log.Debug().Msg("After exec.Command ✓")
+
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	var stdin io.WriteCloser
+	stdin, err = cmd.StdinPipe()
+	if err != nil {
+		a.Log.Info().Msgf("WriteCloser error [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went ping"})
+		return
+	}
+	defer stdin.Close()
+	a.Log.Debug().Msg("After defer stdin.Close ✓")
+
+	if err = cmd.Start(); err != nil {
+		a.Log.Info().Msgf("cmd.Start error [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went twang"})
+		return
+	}
+	a.Log.Debug().Msg("After cmd.Start ✓")
+
+	_, err = io.Copy(stdin, downloadStream)
+	if err != nil {
+		a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splash"})
+		return
+	}
+	stdin.Close()
+	a.Log.Debug().Msg("After stdin.Close ✓")
+
+	if err = cmd.Wait(); err != nil {
+		a.Log.Debug().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "psql failed",
+			"stderr":  stderrBuf.String(),
+			"stdout":  stdoutBuf.String(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusTeapot, gin.H{
+		"message":  "psql",
+		"stderr":   stderrBuf.String(),
+		"stdout":   stdoutBuf.String(),
+		"save_rec": svRec,
+	})
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) ListAllSaves(c *gin.Context) {
+
+	var allSaves []SaveRecord
+	res := a.DB.Find(&allSaves)
+	if res.Error != nil || len(allSaves) == 0 {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("SaveRecord table is empty!")
+			c.JSON(http.StatusNotFound, gin.H{"message": "No save records found"})
+			return
+		}
+		a.Log.Info().Msgf("Error finding SaveRecord table [%s]", res.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"roles": mss})
+	c.JSON(http.StatusOK, gin.H{"total_saves": len(allSaves), "saves": allSaves})
+
+	//c.JSON(http.StatusLocked, gin.H{"message": "Danger! Will Smith; Danger!"})
+
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) RestoreSystemByDataSet(c *gin.Context) {
+	c.JSON(http.StatusLocked, gin.H{"message": "Danger! Will Smith; Danger!"})
 }
 
 //-----------------------------------------------------------------------------
 
 func (a *App) SystemWipe(c *gin.Context) {
-
+	c.JSON(http.StatusOK, gin.H{"message": "wibble"})
 }
 
 //-----------------------------------------------------------------------------
+

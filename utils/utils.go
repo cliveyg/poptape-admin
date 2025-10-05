@@ -7,7 +7,6 @@ import (
 	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 	"os"
 	"reflect"
@@ -124,7 +123,7 @@ func GenerateToken(username string, adminId uuid.UUID) (string, error) {
 
 func ParseToken(ts string) (*Claims, error) {
 
-	log.Debug().Msgf("Parsing token string [%s]", ts)
+	//log.Debug().Msgf("Parsing token string [%s]", ts)
 
 	token, err := jwt.ParseWithClaims(ts, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("TOKEN_SECRET")), nil
@@ -159,6 +158,9 @@ func StructToMap(obj interface{}) map[string]interface{} {
 //-----------------------------------------------------------------------------
 
 func ValidDataInput(inSt string) error {
+	if inSt == "" {
+		return nil
+	}
 	var validName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	if !validName.MatchString(inSt) {
 		return errors.New("invalid data input - incorrect chars")
@@ -167,4 +169,15 @@ func ValidDataInput(inSt string) error {
 		return errors.New("invalid data input - too long")
 	}
 	return nil
+}
+
+// we run this func before parsing as it's stricter than the parser
+func IsValidUUID(s string) bool {
+	var uuidRegex = regexp.MustCompile("^[a-fA-F0-9]{8}\\-[a-fA-F0-9]{4}\\-[a-fA-F0-9]{4}\\-[a-fA-F0-9]{4}\\-[a-fA-F0-9]{12}$")
+	return uuidRegex.MatchString(s)
+}
+
+func IsAcceptedString(s string) bool {
+	var uuidRegex = regexp.MustCompile("^[a-z_]$")
+	return uuidRegex.MatchString(s)
 }
