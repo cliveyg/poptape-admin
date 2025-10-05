@@ -18,9 +18,17 @@ RUN CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -a -ldflags '-w' -o admin
 
 FROM alpine:latest
 
-RUN apk add --no-cache bash postgresql-client && \
+# installing mongo-tools installs a laod of unneeded
+# binaries which we then remove
+RUN apk add --no-cache bash postgresql-client mongodb-tools && \
     mkdir -p /admin && \
-    mkdir -p /admin/log
+    mkdir -p /admin/log && \
+    rm /usr/bin/mongoimport \
+       /usr/bin/mongoexport \
+       /usr/bin/mongostat \
+       /usr/bin/mongofiles \
+       /usr/bin/mongotop \
+       /usr/bin/bsondump
 COPY --from=build /app/admin /admin
 COPY --from=build /app/.env /admin
 WORKDIR /admin

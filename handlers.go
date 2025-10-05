@@ -13,10 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"gorm.io/gorm"
-	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"slices"
 	"strconv"
 )
@@ -506,9 +504,9 @@ func (a *App) BackupDB(c *gin.Context) {
 	}
 
 	if creds.Type == "postgres" {
-		if err := a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
+		if err = a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
 			a.Log.Info().Msgf("Error backing up db [%s]", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up Postgres"})
 			return
 		}
 		var m string
@@ -521,7 +519,18 @@ func (a *App) BackupDB(c *gin.Context) {
 		return
 	}
 	if creds.Type == "mongo" {
-		c.JSON(http.StatusTeapot, gin.H{"message": "Mongie!"})
+		if err := a.backupMongo(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
+			a.Log.Info().Msgf("Error backing up MongoDB [%s]", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up MongoDB"})
+			return
+		}
+		var m string
+		if tabColl != "" {
+			m = fmt.Sprintf("Collection [%s] from [%s] db saved", tabColl, dbName)
+		} else {
+			m = fmt.Sprintf("[%s] mongo db saved", dbName)
+		}
+		c.JSON(http.StatusCreated, gin.H{"message": m, "save_id": saveId.String()})
 		return
 	}
 
@@ -816,136 +825,145 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plop"})
 		return
 	}
+	// TODO: Here is where we do mongo
 
-	if svRec.Mode == "schema" || svRec.Mode == "all" {
-		if svRec.Table != "" {
-			dc := fmt.Sprintf("DROP TABLE %s", svRec.Table)
-			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-				return
-			} else {
-				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
-			}
-		} else {
-			// all tables
-			var tabs []string
-			tabs, err = a.listTables(&crdRec, &pw)
-			if err != nil {
-				a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
-				return
-			}
-			for _, table := range tabs {
-				// index is the index where we are
-				// element is the element from someSlice for where we are
-				a.Log.Debug().Msgf("Table is [%s]", table)
-				dc := fmt.Sprintf("DROP TABLE %s", table)
-				_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-					return
-				} else {
-					a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
-				}
-			}
-
-		}
-
-	} else if svRec.Mode == "data" {
-		// remove all existing records from 1 table
-		if svRec.Table != "" {
-			dc := fmt.Sprintf("DELETE FROM %s;", svRec.Table)
-			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-			if err != nil {
-				//a.Log.Info().Msgf("Error writing sql out [%s]", res.Error.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-				return
-			} else {
-				a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
-			}
-		} else {
-			// remove all recs from all tables
-			var tabs []string
-			tabs, err = a.listTables(&crdRec, &pw)
-			if err != nil {
-				a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
-				return
-			}
-			errFound := false
-			for _, table := range tabs {
-				// TODO: put in one transaction
-				a.Log.Debug().Msgf("Table is [%s]", table)
-				dc := fmt.Sprintf("DELETE FROM %s;", table)
-				_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-					return
-				} else {
-					a.Log.Debug().Msgf("Successfully deleted from tables [%s] ✓", table)
-				}
-			}
-			if errFound {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went kerching"})
-				return
-			}
-		}
-
-	}
-
-	// build psql arguments
-	args := []string{
-		"-h", crdRec.Host,
-		"-U", crdRec.DBUsername,
-		"-p", crdRec.DBPort,
-		"-d", crdRec.DBName,
-		"-f", "-",
-		"-v", "ON_ERROR_STOP=1",
-	}
-	a.Log.Debug().Msgf("args is <<%s>>", args)
-	cmd := exec.Command("psql", args...)
-	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
-	a.Log.Debug().Msg("After exec.Command ✓")
-
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
-
-	var stdin io.WriteCloser
-	stdin, err = cmd.StdinPipe()
-	if err != nil {
-		a.Log.Info().Msgf("WriteCloser error [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went ping"})
+	if svRec.Type == "postgres" {
+		a.RestorePostgres(c, &svRec, &crdRec, &pw, downloadStream)
 		return
+	} else if svRec.Type == "mongo" {
+		//a.RestoreMongo(c, &svRec, &crdRec, &pw, downloadStream)
+		a.Log.Debug().Msg("Should be restoring mongo")
 	}
-	defer stdin.Close()
-	a.Log.Debug().Msg("After defer stdin.Close ✓")
 
-	if err = cmd.Start(); err != nil {
-		a.Log.Info().Msgf("cmd.Start error [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went twang"})
-		return
-	}
-	a.Log.Debug().Msg("After cmd.Start ✓")
-
-	_, err = io.Copy(stdin, downloadStream)
-	if err != nil {
-		a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splash"})
-		return
-	}
-	stdin.Close()
-	a.Log.Debug().Msg("After stdin.Close ✓")
-
-	if err = cmd.Wait(); err != nil {
-		a.Log.Debug().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "psql failed",
-			"stderr":  stderrBuf.String(),
-			"stdout":  stdoutBuf.String(),
-		})
-		return
-	}
+	//if svRec.Mode == "schema" || svRec.Mode == "all" {
+	//	if svRec.Table != "" {
+	//		dc := fmt.Sprintf("DROP TABLE %s", svRec.Table)
+	//		_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+	//		if err != nil {
+	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+	//			return
+	//		} else {
+	//			a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
+	//		}
+	//	} else {
+	//		// all tables
+	//		var tabs []string
+	//		tabs, err = a.listTables(&crdRec, &pw)
+	//		if err != nil {
+	//			a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
+	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+	//			return
+	//		}
+	//		for _, table := range tabs {
+	//			// index is the index where we are
+	//			// element is the element from someSlice for where we are
+	//			a.Log.Debug().Msgf("Table is [%s]", table)
+	//			dc := fmt.Sprintf("DROP TABLE %s", table)
+	//			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+	//			if err != nil {
+	//				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+	//				return
+	//			} else {
+	//				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
+	//			}
+	//		}
+	//
+	//	}
+	//
+	//} else if svRec.Mode == "data" {
+	//	// remove all existing records from 1 table
+	//	if svRec.Table != "" {
+	//		dc := fmt.Sprintf("DELETE FROM %s;", svRec.Table)
+	//		_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+	//		if err != nil {
+	//			//a.Log.Info().Msgf("Error writing sql out [%s]", res.Error.Error())
+	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+	//			return
+	//		} else {
+	//			a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
+	//		}
+	//	} else {
+	//		// remove all recs from all tables
+	//		var tabs []string
+	//		tabs, err = a.listTables(&crdRec, &pw)
+	//		if err != nil {
+	//			a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
+	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+	//			return
+	//		}
+	//		errFound := false
+	//		for _, table := range tabs {
+	//			// TODO: put in one transaction
+	//			a.Log.Debug().Msgf("Table is [%s]", table)
+	//			dc := fmt.Sprintf("DELETE FROM %s;", table)
+	//			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
+	//			if err != nil {
+	//				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+	//				return
+	//			} else {
+	//				a.Log.Debug().Msgf("Successfully deleted from tables [%s] ✓", table)
+	//			}
+	//		}
+	//		if errFound {
+	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went kerching"})
+	//			return
+	//		}
+	//	}
+	//
+	//}
+	//
+	//// build psql arguments
+	//args := []string{
+	//	"-h", crdRec.Host,
+	//	"-U", crdRec.DBUsername,
+	//	"-p", crdRec.DBPort,
+	//	"-d", crdRec.DBName,
+	//	"-f", "-",
+	//	"-v", "ON_ERROR_STOP=1",
+	//}
+	//a.Log.Debug().Msgf("args is <<%s>>", args)
+	//cmd := exec.Command("psql", args...)
+	//cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
+	//a.Log.Debug().Msg("After exec.Command ✓")
+	//
+	//cmd.Stdout = &stdoutBuf
+	//cmd.Stderr = &stderrBuf
+	//
+	//var stdin io.WriteCloser
+	//stdin, err = cmd.StdinPipe()
+	//if err != nil {
+	//	a.Log.Info().Msgf("WriteCloser error [%s]", err.Error())
+	//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went ping"})
+	//	return
+	//}
+	//defer stdin.Close()
+	//a.Log.Debug().Msg("After defer stdin.Close ✓")
+	//
+	//if err = cmd.Start(); err != nil {
+	//	a.Log.Info().Msgf("cmd.Start error [%s]", err.Error())
+	//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went twang"})
+	//	return
+	//}
+	//a.Log.Debug().Msg("After cmd.Start ✓")
+	//
+	//_, err = io.Copy(stdin, downloadStream)
+	//if err != nil {
+	//	a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
+	//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splash"})
+	//	return
+	//}
+	//stdin.Close()
+	//a.Log.Debug().Msg("After stdin.Close ✓")
+	//
+	//if err = cmd.Wait(); err != nil {
+	//	a.Log.Debug().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
+	//	c.JSON(http.StatusInternalServerError, gin.H{
+	//		"message": "psql failed",
+	//		"stderr":  stderrBuf.String(),
+	//		"stdout":  stdoutBuf.String(),
+	//	})
+	//	return
+	//}
 
 	c.JSON(http.StatusTeapot, gin.H{
 		"message":  "psql",
@@ -991,4 +1009,3 @@ func (a *App) SystemWipe(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
-
