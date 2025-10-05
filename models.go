@@ -68,7 +68,7 @@ type Cred struct {
 	Host       string    `json:"host" binding:"required"`
 	Type       string    `json:"type" binding:"required"`
 	URL        string    `json:"url" gorm:"unique" binding:"required"`
-	DBPort     string    `json:"db_port" gorm:"unique" binding:"required"`
+	DBPort     string    `json:"db_port" binding:"required"`
 	DBUsername string    `json:"db_username" gorm:"unique" binding:"required"`
 	DBPassword string    `json:"db_password" binding:"required"`
 	LastUsed   time.Time `json:"last_used" binding:"-"`
@@ -155,16 +155,25 @@ type SaveRecord struct {
 	SaveId         uuid.UUID `json:"save_id" gorm:"type:uuid;primaryKey;"`
 	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId" binding:"required"`
 	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId" binding:"required"`
+	DBName         string    `json:"db_name" binding:"required"`
+	Table          string    `json:"table"`
 	SavedBy        string    `json:"savedBy" binding:"required"`
 	Version        int       `json:"version" binding:"required"`
 	Dataset        int       `json:"dataset"`
 	Mode           string    `json:"mode" binding:"required"`
 	Valid          bool      `json:"valid" binding:"required"`
 	Notes          string    `json:"notes"`
-	Created        time.Time `json:"-"`
+	Created        time.Time `json:"created"`
+	Updated        time.Time `json:"updated"`
 }
 
 func (s *SaveRecord) BeforeCreate(_ *gorm.DB) (err error) {
 	s.Created = time.Now()
+	s.Updated = time.Now()
+	return
+}
+
+func (s *SaveRecord) BeforeUpdate(_ *gorm.DB) (err error) {
+	s.Updated = time.Now()
 	return
 }

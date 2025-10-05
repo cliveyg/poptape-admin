@@ -13,10 +13,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -330,19 +330,22 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		dso = "--data-only"
 	}
 
-	tab := ""
-	if table != "" {
-		tab = "--table " + table
-	}
-
+	// build pg_dump arguments
 	args := []string{
 		"-h", creds.Host,
 		"-U", creds.DBUsername,
 		"-p", creds.DBPort,
-		tab,
-		dso,
-		creds.DBName,
 	}
+	if table != "" {
+		args = append(args, "-t")
+		args = append(args, table)
+	}
+	if dso != "" {
+		args = append(args, dso)
+	}
+	args = append(args, creds.DBName)
+
+	a.Log.Debug().Msgf("args is <<%s>>", args)
 
 	cmd := exec.Command("pg_dump", args...)
 	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
@@ -380,8 +383,8 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		options.GridFSUpload().SetMetadata(map[string]interface{}{
 			"created_at": time.Now(),
 			"created_by": u.AdminId.String(),
-			"saveId":     saveId.String(),
-			"msId":       msId.String(),
+			"save_id":    saveId.String(),
+			"ms_id":      msId.String(),
 			"mode":       mode,
 		}),
 	)
@@ -409,6 +412,8 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		SavedBy:        u.Username,
 		Dataset:        0,
 		Mode:           mode,
+		DBName:         creds.DBUsername,
+		Table:          table,
 		Valid:          true,
 	}
 
@@ -418,23 +423,35 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 	}
 	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
 
+	// TODO: update creds with last used deets
+
 	return nil
 }
 
 //-----------------------------------------------------------------------------
 
 func (a *App) SaveWithAutoVersion(rec *SaveRecord) error {
-	return a.DB.Transaction(func(tx *gorm.DB) error {
-		var maxVersion int
-		err := tx.Model(&SaveRecord{}).
-			Where("microservice_id = ?", rec.MicroserviceId).
-			Select("COALESCE(MAX(version), 0)").
-			Clauses(clause.Locking{Strength: "UPDATE"}).
-			Scan(&maxVersion).Error
-		if err != nil {
-			return err
+	const maxAttempts = 5
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err := a.DB.Transaction(func(tx *gorm.DB) error {
+			var maxVersion int
+			err := tx.Model(&SaveRecord{}).
+				Where("microservice_id = ?", rec.MicroserviceId).
+				Select("COALESCE(MAX(version), 0)").Scan(&maxVersion).Error
+			if err != nil {
+				return err
+			}
+			rec.Version = maxVersion + 1
+			return tx.Create(rec).Error
+		})
+		if err == nil {
+			return nil
 		}
-		rec.Version = maxVersion + 1
-		return tx.Create(rec).Error
-	})
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			time.Sleep(10 * time.Millisecond) // tiny backoff, optional
+			continue                          // retry
+		}
+		return err // other error: return immediately
+	}
+	return fmt.Errorf("failed to insert SaveRecord for microservice %s after max attempts", rec.MicroserviceId.String())
 }

@@ -27,26 +27,43 @@ func (a *App) InitialiseRoutes() {
 
 	// backup specific db and table/collection
 	a.Router.GET("/admin/save/:msId/:db/:tab", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.Log.Info().Msg("First path")
 		a.BackupDB(c)
 	})
 
 	// backup specific db
 	a.Router.GET("/admin/save/:msId/:db", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.Log.Info().Msg("Should get here")
 		a.BackupDB(c)
 	})
 
 	// load specific db table/collection
 	a.Router.GET("/admin/load/:msId/:db/:tab", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.Log.Info().Msg("First path")
 		a.RestoreDB(c)
 	})
 
-	// load specific db
+	// load latest version specific db
 	a.Router.GET("/admin/load/:msId/:db", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.Log.Info().Msg("Should get here")
+		a.Log.Info().Msg("load latest version specific db")
 		a.RestoreDB(c)
+	})
+
+	// list all saves by microservice id
+	a.Router.GET("/admin/microservice/:msId/saves", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
+		a.ListAllSavesByMicroservice(c)
+	})
+
+	// load db/table by save_id - access control for this is handled in the function itself
+	// and not by the standard accessControlMiddleware() functionality
+	a.Router.GET("/admin/load/data/:saveId", a.authMiddleware(false), func(c *gin.Context) {
+		a.RestoreDBBySaveId(c)
+	})
+
+	a.Router.GET("/admin/saves", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
+		a.ListAllSaves(c)
+	})
+
+	// load entire system based on the dataset number - superadmin only
+	a.Router.GET("/admin/load/dataset/:dset", a.authMiddleware(false), a.accessControlMiddleware([]string{"super"}), func(c *gin.Context) {
+		a.RestoreSystemByDataSet(c)
 	})
 
 	// create creds record for microservice/db
@@ -108,11 +125,6 @@ func (a *App) InitialiseRoutes() {
 	a.Router.GET("/admin/test/pgdump", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.TestRoute(c)
 	})
-
-	// test route
-	//a.Router.GET("/admin/test/access/:msId", a.authMicroserviceMiddleware(true), a.accessControlMicroserviceMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-	//	a.Testy(c)
-	//})
 
 	// get aws deets
 	a.Router.GET("/admin/aws/:awsId", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {

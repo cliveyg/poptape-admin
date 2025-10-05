@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"gorm.io/gorm"
 	"net/http"
 	"os"
+	"os/exec"
 	"slices"
+	"strings"
 )
 
 type YHeader struct {
@@ -30,7 +33,6 @@ func (a *App) getUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error 
 	*u, err = uuid.Parse(fmt.Sprintf("%v", idAny))
 	if err != nil {
 		a.Log.Info().Msgf("Input not a uuid string: [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return err
 	}
 	return nil
@@ -169,11 +171,46 @@ func (a *App) encryptCredPass(cr *Cred) error {
 	return nil
 }
 
+func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
+	rcms := RoleCredMS{
+		CredId:         svRec.CredId,
+		MicroserviceId: svRec.MicroserviceId,
+	}
+	res := a.DB.First(&rcms)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("RoleCredMS not found [%s]", svRec)
+			return http.StatusNotFound, errors.New("RoleCredMS record not found")
+		}
+		a.Log.Info().Msgf("Error finding RoleCredMS [%s]", res.Error.Error())
+		return http.StatusInternalServerError, errors.New("Something went boooom")
+	}
+	validRoles := []string{"super", "admin"}
+	validRoles = append(validRoles, rcms.RoleName)
+
+	if !a.userHasValidRole(u.Roles, validRoles) {
+		a.Log.Info().Msgf("User [%s] does not have valid role", u.Username)
+		return http.StatusForbidden, errors.New("Forbidden")
+	}
+	return http.StatusOK, nil
+}
+
 func (a *App) getRoleDetails(c *gin.Context, u *User, rName *string) error {
-	adminId, err := uuid.Parse(c.Param("aId"))
-	if err != nil {
-		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
-		return err
+	if !utils.IsValidUUID(c.Param("aId")) {
+		a.Log.Info().Msgf("Invalid aId in url [%s]", c.Param("aId"))
+		return errors.New("Invalid aId in url")
+	}
+	//adminId := c.Param("aId")
+	adminId, _ := uuid.Parse(c.Param("aId"))
+	//adminId, err := uuid.Parse(c.Param("aId"))
+	//if err != nil {
+	//	a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
+	//	return err
+	//}
+
+	if !utils.IsAcceptedString(c.Param("rName")) {
+		a.Log.Info().Msgf("Invalid rolename in url [%s]", c.Param("rName"))
+		return errors.New("Invalid rolename in url")
 	}
 	*rName = c.Param("rName")
 	if len(*rName) > 20 {
@@ -196,4 +233,63 @@ func (a *App) getRoleDetails(c *gin.Context, u *User, rName *string) error {
 		return errors.New("user not found")
 	}
 	return nil
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any, error) {
+	var stdoutBuf, stderrBuf bytes.Buffer
+
+	// build psql arguments
+	args := []string{
+		"-h", crdRec.Host,
+		"-U", crdRec.DBUsername,
+		"-p", crdRec.DBPort,
+		"-d", crdRec.DBName,
+		"-c", cm,
+	}
+	if tabRet {
+		args = append(args, "-A", "-t")
+	}
+	a.Log.Debug().Msgf("args is <<%s>>", args)
+	cmd := exec.Command("psql", args...)
+	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(*pw))
+	a.Log.Debug().Msg("After exec.Command ✓")
+
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	err := cmd.Run()
+	a.Log.Debug().Msgf("STDOUT:\n%s\n", stdoutBuf.String())
+	a.Log.Debug().Msgf("STDERR:\n%s\n", stderrBuf.String())
+	if err != nil {
+		//fmt.Printf("psql command failed: %v\n", err)
+		a.Log.Info().Msgf("psql command failed: %s", err.Error())
+		a.Log.Info().Msgf("STDERR:\n%s\n", stderrBuf.String())
+		return nil, err
+	}
+
+	return stdoutBuf.String(), nil
+}
+
+//-----------------------------------------------------------------------------
+
+func (a *App) listTables(crd *Cred, pw *[]byte) ([]string, error) {
+
+	var tables []string
+	cm := "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');"
+	out, err := a.writeSQLOut(cm, crd, pw, true)
+	if err != nil {
+		return nil, err
+	}
+
+	s, ok := out.(string)
+	if !ok {
+		return nil, errors.New("unable to cast any to string")
+	}
+
+	tables = strings.Split(strings.TrimSpace(s), "\n")
+	a.Log.Info().Msgf("output is [%s]", tables)
+
+	return tables, nil
 }

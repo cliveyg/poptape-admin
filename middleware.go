@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"net/http"
 	"os"
 )
@@ -57,14 +59,16 @@ func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
 			rcms := RoleCredMS{}
 			res := a.DB.Where("microservice_id = ?", msId).First(&rcms)
 			if res.Error != nil {
-				a.Log.Info().Msgf("Error finding microservice [%s]", res.Error.Error())
+				if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+					a.Log.Info().Msgf("RoleCredMS not found for ms [%s]", msId)
+					c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "RoleCredMS record not found"})
+					return
+				}
+				a.Log.Info().Msgf("Error finding RoleCredMS [%s]", res.Error.Error())
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "Something went whump"})
 				return
 			}
-			if res.RowsAffected == 0 {
-				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "Role not found for MS"})
-				return
-			}
+			a.Log.Debug().Msgf("RoleCredMS is [%s]", rcms)
 			c.Set("role", rcms.RoleName)
 			c.Set("cred_id", rcms.CredId)
 			c.Set("ms_id", rcms.MicroserviceId)
