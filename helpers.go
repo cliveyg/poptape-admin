@@ -8,18 +8,24 @@ import (
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 )
 
 type YHeader struct {
 	TokenString string `header:"y-access-token" binding:"required"`
 }
 
+//-----------------------------------------------------------------------------
+// getUUIDFromParams
 //-----------------------------------------------------------------------------
 
 func (a *App) getUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error {
@@ -38,6 +44,8 @@ func (a *App) getUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error 
 	return nil
 }
 
+//-----------------------------------------------------------------------------
+// checkLoginDetails
 //-----------------------------------------------------------------------------
 
 func (a *App) checkLoginDetails(l *Login, u *User) error {
@@ -69,6 +77,8 @@ func (a *App) checkLoginDetails(l *Login, u *User) error {
 	return nil
 }
 
+//-----------------------------------------------------------------------------
+// hasValidJWT
 //-----------------------------------------------------------------------------
 
 func (a *App) hasValidJWT(c *gin.Context) bool {
@@ -112,6 +122,8 @@ func (a *App) hasValidJWT(c *gin.Context) bool {
 }
 
 //-----------------------------------------------------------------------------
+// userHasValidRole
+//-----------------------------------------------------------------------------
 
 func (a *App) userHasValidRole(roles []Role, allowedRoles []string) bool {
 
@@ -126,32 +138,7 @@ func (a *App) userHasValidRole(roles []Role, allowedRoles []string) bool {
 }
 
 //-----------------------------------------------------------------------------
-
-func (a *App) testEncryptDecrypt(s string) {
-	key := []byte(os.Getenv("SUPERSECRETKEY"))
-	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
-
-	var es string
-	var err error
-	es, err = utils.Encrypt([]byte(s), key, nonce)
-	if err != nil {
-		a.Log.Error().Msg(err.Error())
-	}
-	a.Log.Debug().Msgf("Encrypted string is [%s]", es)
-	a.Log.Info().Msg("Attempting to decrypt")
-
-	var ba []byte
-	ba, err = utils.Decrypt(es, key, nonce)
-	if err != nil {
-		a.Log.Error().Msg(err.Error())
-	}
-	if s == string(ba) {
-		a.Log.Debug().Msgf("Decrypted string is same as original")
-	} else {
-		a.Log.Debug().Msgf("Error in encryption/decryption process")
-	}
-}
-
+// encryptCredPass
 //-----------------------------------------------------------------------------
 
 func (a *App) encryptCredPass(cr *Cred) error {
@@ -170,6 +157,10 @@ func (a *App) encryptCredPass(cr *Cred) error {
 	cr.DBPassword = est
 	return nil
 }
+
+//-----------------------------------------------------------------------------
+// userHasCorrectAccess
+//-----------------------------------------------------------------------------
 
 func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
 	rcms := RoleCredMS{
@@ -195,18 +186,16 @@ func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
 	return http.StatusOK, nil
 }
 
+//-----------------------------------------------------------------------------
+// getRoleDetails
+//-----------------------------------------------------------------------------
+
 func (a *App) getRoleDetails(c *gin.Context, u *User, rName *string) error {
 	if !utils.IsValidUUID(c.Param("aId")) {
 		a.Log.Info().Msgf("Invalid aId in url [%s]", c.Param("aId"))
 		return errors.New("Invalid aId in url")
 	}
-	//adminId := c.Param("aId")
 	adminId, _ := uuid.Parse(c.Param("aId"))
-	//adminId, err := uuid.Parse(c.Param("aId"))
-	//if err != nil {
-	//	a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
-	//	return err
-	//}
 
 	if !utils.IsAcceptedString(c.Param("rName")) {
 		a.Log.Info().Msgf("Invalid rolename in url [%s]", c.Param("rName"))
@@ -235,6 +224,8 @@ func (a *App) getRoleDetails(c *gin.Context, u *User, rName *string) error {
 	return nil
 }
 
+//-----------------------------------------------------------------------------
+// writeSQLOut
 //-----------------------------------------------------------------------------
 
 func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any, error) {
@@ -273,6 +264,81 @@ func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any
 }
 
 //-----------------------------------------------------------------------------
+// writeMongoOut
+//-----------------------------------------------------------------------------
+
+func (a *App) writeMongoOut(c *gin.Context, cmdStr string, crdRec *Cred, pw *[]byte) (string, error) {
+	var stdoutBuf, stderrBuf bytes.Buffer
+
+	uri := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=%s",
+		crdRec.DBUsername, string(*pw), crdRec.Host, crdRec.DBPort, crdRec.DBName, crdRec.DBName)
+
+	a.Log.Debug().Msgf("mongo driver URI is <<%s>>", uri)
+	a.Log.Debug().Msgf("writeMongoOut cmdStr is <<%s>>", cmdStr)
+
+	// Use the gin.Context's request context for Mongo operations
+	mongoCtx := c.Request.Context()
+
+	client, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(uri))
+	if err != nil {
+		a.Log.Info().Msgf("mongo client connect failed: %s", err.Error())
+		return "", err
+	}
+	defer func() { _ = client.Disconnect(mongoCtx) }()
+
+	if err := client.Ping(mongoCtx, readpref.Primary()); err != nil {
+		a.Log.Info().Msgf("mongo ping failed: %s", err.Error())
+		return "", err
+	}
+
+	// Handle "drop all collections" pattern
+	if strings.HasPrefix(cmdStr, "db.getCollectionNames().forEach") {
+		collNames, err := client.Database(crdRec.DBName).ListCollectionNames(mongoCtx, map[string]interface{}{})
+		if err != nil {
+			a.Log.Info().Msgf("Failed to list collections: %s", err.Error())
+			return "", err
+		}
+		var dropped int64
+		for _, name := range collNames {
+			err := client.Database(crdRec.DBName).Collection(name).Drop(mongoCtx)
+			if err != nil {
+				a.Log.Info().Msgf("Failed to drop collection %s: %s", name, err.Error())
+				stderrBuf.WriteString(fmt.Sprintf("Failed to drop %s: %v\n", name, err))
+			} else {
+				dropped++
+				stdoutBuf.WriteString(fmt.Sprintf("Dropped collection: %s\n", name))
+			}
+		}
+		stdoutBuf.WriteString(fmt.Sprintf("Dropped %d collections\n", dropped))
+		return stdoutBuf.String(), nil
+	}
+
+	// Handle "db.collection.deleteMany({})" pattern
+	var collectionName string
+	cmdStr = strings.TrimSpace(cmdStr)
+	if strings.HasPrefix(cmdStr, "db.") && strings.Contains(cmdStr, ".deleteMany") {
+		s := strings.TrimPrefix(cmdStr, "db.")
+		collectionName = strings.SplitN(s, ".", 2)[0]
+		a.Log.Debug().Msgf("Deleting all documents in collection: %s", collectionName)
+		coll := client.Database(crdRec.DBName).Collection(collectionName)
+		result, err := coll.DeleteMany(mongoCtx, map[string]interface{}{})
+		if err != nil {
+			a.Log.Info().Msgf("collection deleteMany failed: %s", err.Error())
+			return "", err
+		}
+		stdoutBuf.WriteString(fmt.Sprintf("Deleted %d documents from collection %s\n", result.DeletedCount, collectionName))
+		return stdoutBuf.String(), nil
+	}
+
+	// Unknown or unsupported command pattern
+	stderrBuf.WriteString("Could not parse or execute cmdStr: " + cmdStr)
+	a.Log.Info().Msg(stderrBuf.String())
+	return "", fmt.Errorf(stderrBuf.String())
+}
+
+//-----------------------------------------------------------------------------
+// listTables
+//-----------------------------------------------------------------------------
 
 func (a *App) listTables(crd *Cred, pw *[]byte) ([]string, error) {
 
@@ -292,4 +358,34 @@ func (a *App) listTables(crd *Cred, pw *[]byte) ([]string, error) {
 	a.Log.Info().Msgf("output is [%s]", tables)
 
 	return tables, nil
+}
+
+//-----------------------------------------------------------------------------
+// SaveWithAutoVersion
+//-----------------------------------------------------------------------------
+
+func (a *App) SaveWithAutoVersion(rec *SaveRecord) error {
+	const maxAttempts = 5
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err := a.DB.Transaction(func(tx *gorm.DB) error {
+			var maxVersion int
+			err := tx.Model(&SaveRecord{}).
+				Where("microservice_id = ?", rec.MicroserviceId).
+				Select("COALESCE(MAX(version), 0)").Scan(&maxVersion).Error
+			if err != nil {
+				return err
+			}
+			rec.Version = maxVersion + 1
+			return tx.Create(rec).Error
+		})
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			time.Sleep(10 * time.Millisecond)
+			continue // retry
+		}
+		return err
+	}
+	return fmt.Errorf("failed to insert SaveRecord for microservice %s after max attempts", rec.MicroserviceId.String())
 }

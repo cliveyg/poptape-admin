@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -19,6 +18,8 @@ import (
 	"strconv"
 )
 
+//-----------------------------------------------------------------------------
+// ListAllCreds
 //-----------------------------------------------------------------------------
 
 func (a *App) ListAllCreds(c *gin.Context) {
@@ -41,21 +42,17 @@ func (a *App) ListAllCreds(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// FetchCredsById
+//-----------------------------------------------------------------------------
 
 func (a *App) FetchCredsById(c *gin.Context) {
 
-	//credId, err := uuid.Parse(c.Param("cId"))
 	if !utils.IsValidUUID(c.Param("cId")) {
 		a.Log.Info().Msg("Invalid cred id in url")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
 	credId := c.Param("cId")
-	//if err != nil {
-	//	a.Log.Info().Msgf("Invalid cred id in url [%s]", err.Error())
-	//	c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-	//	return
-	//}
 	cr := Cred{}
 	res := a.DB.First(&cr, credId)
 	if res.Error != nil {
@@ -73,6 +70,8 @@ func (a *App) FetchCredsById(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"creds": &cr})
 }
 
+//-----------------------------------------------------------------------------
+// CreateCreds
 //-----------------------------------------------------------------------------
 
 func (a *App) CreateCreds(c *gin.Context) {
@@ -150,6 +149,8 @@ func (a *App) CreateCreds(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// FetchAllUsers
+//-----------------------------------------------------------------------------
 
 func (a *App) FetchAllUsers(c *gin.Context) {
 	// TODO pagination? - not sure it needs it tbh
@@ -167,6 +168,8 @@ func (a *App) FetchAllUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }
 
+//-----------------------------------------------------------------------------
+// FetchUser
 //-----------------------------------------------------------------------------
 
 func (a *App) FetchUser(c *gin.Context) {
@@ -198,6 +201,8 @@ func (a *App) FetchUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": u})
 }
 
+//-----------------------------------------------------------------------------
+// AddRoleToUser
 //-----------------------------------------------------------------------------
 
 func (a *App) AddRoleToUser(c *gin.Context) {
@@ -241,6 +246,8 @@ func (a *App) AddRoleToUser(c *gin.Context) {
 
 }
 
+//-----------------------------------------------------------------------------
+// RemoveRoleFromUser
 //-----------------------------------------------------------------------------
 
 func (a *App) RemoveRoleFromUser(c *gin.Context) {
@@ -300,6 +307,8 @@ func (a *App) RemoveRoleFromUser(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// EditUser
+//-----------------------------------------------------------------------------
 
 func (a *App) EditUser(c *gin.Context) {
 
@@ -354,6 +363,8 @@ func (a *App) EditUser(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// DeleteUser
+//-----------------------------------------------------------------------------
 
 func (a *App) DeleteUser(c *gin.Context) {
 
@@ -375,6 +386,8 @@ func (a *App) DeleteUser(c *gin.Context) {
 	c.JSON(http.StatusGone, gin.H{"message": "User deleted"})
 }
 
+//-----------------------------------------------------------------------------
+// CreateUser
 //-----------------------------------------------------------------------------
 
 func (a *App) CreateUser(c *gin.Context) {
@@ -431,6 +444,8 @@ func (a *App) CreateUser(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// TestRoute
+//-----------------------------------------------------------------------------
 
 func (a *App) TestRoute(c *gin.Context) {
 	a.Log.Debug().Msg("All valid and in TestRoute")
@@ -438,6 +453,8 @@ func (a *App) TestRoute(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "meeeep!"})
 }
 
+//-----------------------------------------------------------------------------
+// Login
 //-----------------------------------------------------------------------------
 
 func (a *App) Login(c *gin.Context) {
@@ -475,12 +492,16 @@ func (a *App) Login(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// Testy
+//-----------------------------------------------------------------------------
 
 func (a *App) Testy(c *gin.Context) {
 	a.Log.Debug().Msg("In Testy")
 	c.JSON(http.StatusTeapot, gin.H{"message": "Cup of tea?"})
 }
 
+//-----------------------------------------------------------------------------
+// BackupDB
 //-----------------------------------------------------------------------------
 
 func (a *App) BackupDB(c *gin.Context) {
@@ -539,6 +560,8 @@ func (a *App) BackupDB(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// RestoreDB
+//-----------------------------------------------------------------------------
 
 func (a *App) RestoreDB(c *gin.Context) {
 
@@ -563,6 +586,8 @@ func (a *App) RestoreDB(c *gin.Context) {
 
 }
 
+//-----------------------------------------------------------------------------
+// prepSaveRestore
 //-----------------------------------------------------------------------------
 
 //goland:noinspection GoErrorStringFormat
@@ -626,6 +651,10 @@ func (a *App) prepSaveRestore(c *gin.Context, dbName, tabColl, mode *string, cre
 	return http.StatusOK, nil
 }
 
+//-----------------------------------------------------------------------------
+// ListMicroservices
+//-----------------------------------------------------------------------------
+
 func (a *App) ListMicroservices(c *gin.Context) {
 
 	var mss []Microservice
@@ -654,6 +683,8 @@ func (a *App) ListMicroservices(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// ListAllRoles
+//-----------------------------------------------------------------------------
 
 func (a *App) ListAllRoles(c *gin.Context) {
 	var roles []Role
@@ -681,6 +712,8 @@ func (a *App) ListAllRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"roles": roles})
 }
 
+//-----------------------------------------------------------------------------
+// ListAllSavesByMicroservice
 //-----------------------------------------------------------------------------
 
 func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
@@ -725,48 +758,48 @@ func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// RestoreDBBySaveId
+//-----------------------------------------------------------------------------
 
 func (a *App) RestoreDBBySaveId(c *gin.Context) {
-
 	if !utils.IsValidUUID(c.Param("saveId")) {
 		a.Log.Info().Msg("Invalid saveId in url")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Not a uuid string"})
 		return
 	}
 	saveId, _ := uuid.Parse(c.Param("saveId"))
-	svRec := SaveRecord{
-		SaveId: saveId,
-	}
+	svRec := SaveRecord{SaveId: saveId}
 	res := a.DB.First(&svRec)
 	if res.Error != nil {
+		status := http.StatusInternalServerError
+		msg := "Something went whump"
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msgf("Record not found for save id [%s]", saveId)
-			c.JSON(http.StatusNotFound, gin.H{"message": "RoleCredMS record not found"})
-			return
+			status = http.StatusNotFound
+			msg = "RoleCredMS record not found"
+		} else {
+			a.Log.Info().Msgf("Error finding SaveRecord [%s]", res.Error.Error())
 		}
-		a.Log.Info().Msgf("Error finding SaveRecord [%s]", res.Error.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went whump"})
+		c.JSON(status, gin.H{"message": msg})
 		return
 	}
 	a.Log.Debug().Msg("Found SaveRecord ✓")
 
-	var i interface{}
-	i, _ = c.Get("user")
-	u := i.(User)
+	user, _ := c.Get("user")
+	u := user.(User)
 	c.Set("user", u)
-
 	sc, err := a.userHasCorrectAccess(&svRec, &u)
 	if err != nil {
 		c.JSON(sc, gin.H{"message": err.Error()})
 		return
 	}
-
 	a.Log.Debug().Msgf("User [%s] has correct access ✓", u.Username)
 
+	// fetch the backup stream from GridFS
 	db := a.Mongo.Database(svRec.DBName)
 	collection := db.Collection("fs.files")
-	var fileDoc bson.M
 	ctx := c.Request.Context()
+	var fileDoc bson.M
 	err = collection.FindOne(ctx, bson.M{"metadata.save_id": svRec.SaveId.String()}).Decode(&fileDoc)
 	if err != nil {
 		a.Log.Info().Msgf("File not found for save_id %s: %s", svRec.SaveId.String(), err)
@@ -780,16 +813,13 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "File _id is not ObjectID"})
 		return
 	}
-
-	var bucket *gridfs.Bucket
-	bucket, err = gridfs.NewBucket(db)
+	bucket, err := gridfs.NewBucket(db)
 	if err != nil {
 		a.Log.Info().Msgf("gridfs.NewBucket error: %s", err)
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "gridfs.NewBucket error"})
 		return
 	}
 	a.Log.Debug().Msg("Created bucket ✓")
-
 	downloadStream, err := bucket.OpenDownloadStream(fileID)
 	if err != nil {
 		a.Log.Info().Msgf("OpenDownloadStream error: %s", err)
@@ -799,180 +829,45 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 	defer downloadStream.Close()
 	a.Log.Debug().Msg("OpenDownloadStream success ✓")
 
-	var stdoutBuf, stderrBuf bytes.Buffer
-
-	crdRec := Cred{
-		CredId: svRec.CredId,
-	}
-
+	// fetch credentials and decrypt
+	var crdRec Cred
+	crdRec.CredId = svRec.CredId
 	res = a.DB.First(&crdRec)
 	if res.Error != nil {
+		status := http.StatusInternalServerError
+		msg := "Something went whump"
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msgf("Record not found for cred id [%s]", crdRec.CredId.String())
-			c.JSON(http.StatusNotFound, gin.H{"message": "Cred record not found"})
-			return
+			status = http.StatusNotFound
+			msg = "Cred record not found"
+		} else {
+			a.Log.Info().Msgf("Error finding Cred [%s]", res.Error.Error())
 		}
-		a.Log.Info().Msgf("Error finding Cred [%s]", res.Error.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went whump"})
+		c.JSON(status, gin.H{"message": msg})
 		return
 	}
 	key := []byte(os.Getenv("SUPERSECRETKEY"))
 	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
-	var pw []byte
-	pw, err = utils.Decrypt(crdRec.DBPassword, key, nonce)
+	pw, err := utils.Decrypt(crdRec.DBPassword, key, nonce)
 	if err != nil {
 		a.Log.Info().Msgf("Error decrypting password from creds [%s]", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plop"})
 		return
 	}
-	// TODO: Here is where we do mongo
 
-	if svRec.Type == "postgres" {
+	// dispatch to the correct restore function
+	switch svRec.Type {
+	case "postgres":
 		a.RestorePostgres(c, &svRec, &crdRec, &pw, downloadStream)
-		return
-	} else if svRec.Type == "mongo" {
-		//a.RestoreMongo(c, &svRec, &crdRec, &pw, downloadStream)
-		a.Log.Debug().Msg("Should be restoring mongo")
+	case "mongo":
+		a.RestoreMongo(c, &svRec, &crdRec, &pw, downloadStream)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid save type"})
 	}
-
-	//if svRec.Mode == "schema" || svRec.Mode == "all" {
-	//	if svRec.Table != "" {
-	//		dc := fmt.Sprintf("DROP TABLE %s", svRec.Table)
-	//		_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-	//		if err != nil {
-	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-	//			return
-	//		} else {
-	//			a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
-	//		}
-	//	} else {
-	//		// all tables
-	//		var tabs []string
-	//		tabs, err = a.listTables(&crdRec, &pw)
-	//		if err != nil {
-	//			a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
-	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
-	//			return
-	//		}
-	//		for _, table := range tabs {
-	//			// index is the index where we are
-	//			// element is the element from someSlice for where we are
-	//			a.Log.Debug().Msgf("Table is [%s]", table)
-	//			dc := fmt.Sprintf("DROP TABLE %s", table)
-	//			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-	//			if err != nil {
-	//				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-	//				return
-	//			} else {
-	//				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
-	//			}
-	//		}
-	//
-	//	}
-	//
-	//} else if svRec.Mode == "data" {
-	//	// remove all existing records from 1 table
-	//	if svRec.Table != "" {
-	//		dc := fmt.Sprintf("DELETE FROM %s;", svRec.Table)
-	//		_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-	//		if err != nil {
-	//			//a.Log.Info().Msgf("Error writing sql out [%s]", res.Error.Error())
-	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-	//			return
-	//		} else {
-	//			a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
-	//		}
-	//	} else {
-	//		// remove all recs from all tables
-	//		var tabs []string
-	//		tabs, err = a.listTables(&crdRec, &pw)
-	//		if err != nil {
-	//			a.Log.Info().Msgf("Error listing tables [%s]", res.Error.Error())
-	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
-	//			return
-	//		}
-	//		errFound := false
-	//		for _, table := range tabs {
-	//			// TODO: put in one transaction
-	//			a.Log.Debug().Msgf("Table is [%s]", table)
-	//			dc := fmt.Sprintf("DELETE FROM %s;", table)
-	//			_, err = a.writeSQLOut(dc, &crdRec, &pw, false)
-	//			if err != nil {
-	//				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-	//				return
-	//			} else {
-	//				a.Log.Debug().Msgf("Successfully deleted from tables [%s] ✓", table)
-	//			}
-	//		}
-	//		if errFound {
-	//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went kerching"})
-	//			return
-	//		}
-	//	}
-	//
-	//}
-	//
-	//// build psql arguments
-	//args := []string{
-	//	"-h", crdRec.Host,
-	//	"-U", crdRec.DBUsername,
-	//	"-p", crdRec.DBPort,
-	//	"-d", crdRec.DBName,
-	//	"-f", "-",
-	//	"-v", "ON_ERROR_STOP=1",
-	//}
-	//a.Log.Debug().Msgf("args is <<%s>>", args)
-	//cmd := exec.Command("psql", args...)
-	//cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
-	//a.Log.Debug().Msg("After exec.Command ✓")
-	//
-	//cmd.Stdout = &stdoutBuf
-	//cmd.Stderr = &stderrBuf
-	//
-	//var stdin io.WriteCloser
-	//stdin, err = cmd.StdinPipe()
-	//if err != nil {
-	//	a.Log.Info().Msgf("WriteCloser error [%s]", err.Error())
-	//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went ping"})
-	//	return
-	//}
-	//defer stdin.Close()
-	//a.Log.Debug().Msg("After defer stdin.Close ✓")
-	//
-	//if err = cmd.Start(); err != nil {
-	//	a.Log.Info().Msgf("cmd.Start error [%s]", err.Error())
-	//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went twang"})
-	//	return
-	//}
-	//a.Log.Debug().Msg("After cmd.Start ✓")
-	//
-	//_, err = io.Copy(stdin, downloadStream)
-	//if err != nil {
-	//	a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
-	//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splash"})
-	//	return
-	//}
-	//stdin.Close()
-	//a.Log.Debug().Msg("After stdin.Close ✓")
-	//
-	//if err = cmd.Wait(); err != nil {
-	//	a.Log.Debug().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
-	//	c.JSON(http.StatusInternalServerError, gin.H{
-	//		"message": "psql failed",
-	//		"stderr":  stderrBuf.String(),
-	//		"stdout":  stdoutBuf.String(),
-	//	})
-	//	return
-	//}
-
-	c.JSON(http.StatusTeapot, gin.H{
-		"message":  "psql",
-		"stderr":   stderrBuf.String(),
-		"stdout":   stdoutBuf.String(),
-		"save_rec": svRec,
-	})
 }
 
+//-----------------------------------------------------------------------------
+// ListAllSaves
 //-----------------------------------------------------------------------------
 
 func (a *App) ListAllSaves(c *gin.Context) {
@@ -992,10 +887,10 @@ func (a *App) ListAllSaves(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"total_saves": len(allSaves), "saves": allSaves})
 
-	//c.JSON(http.StatusLocked, gin.H{"message": "Danger! Will Smith; Danger!"})
-
 }
 
+//-----------------------------------------------------------------------------
+// RestoreSystemByDataSet
 //-----------------------------------------------------------------------------
 
 func (a *App) RestoreSystemByDataSet(c *gin.Context) {
@@ -1003,9 +898,13 @@ func (a *App) RestoreSystemByDataSet(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// SystemWipe
+//-----------------------------------------------------------------------------
 
 func (a *App) SystemWipe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "wibble"})
 }
 
+//-----------------------------------------------------------------------------
+// CCCC
 //-----------------------------------------------------------------------------

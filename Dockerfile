@@ -33,7 +33,6 @@ COPY --from=build /app/admin /admin
 COPY --from=build /app/.env /admin
 WORKDIR /admin
 
-
 # Make port available to the world outside this container
 EXPOSE $PORT
 
