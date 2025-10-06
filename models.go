@@ -162,6 +162,7 @@ type SaveRecord struct {
 	Dataset        int       `json:"dataset"`
 	Mode           string    `json:"mode" binding:"required"`
 	Valid          bool      `json:"valid" binding:"required"`
+	Type           string    `json:"type" binding:"required"`
 	Notes          string    `json:"notes"`
 	Created        time.Time `json:"created"`
 	Updated        time.Time `json:"updated"`

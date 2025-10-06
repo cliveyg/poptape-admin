@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
@@ -14,12 +16,14 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 )
 
+//-----------------------------------------------------------------------------
+// InitialiseMongo
 //-----------------------------------------------------------------------------
 
 func (a *App) InitialiseMongo() {
@@ -68,6 +72,8 @@ func (a *App) InitialiseMongo() {
 }
 
 //-----------------------------------------------------------------------------
+// InitialisePostgres
+//-----------------------------------------------------------------------------
 
 func (a *App) InitialisePostgres() {
 
@@ -99,6 +105,8 @@ func (a *App) InitialisePostgres() {
 }
 
 //-----------------------------------------------------------------------------
+// connectToPostgres
+//-----------------------------------------------------------------------------
 
 func connectToPostgres() (*gorm.DB, error) {
 
@@ -117,6 +125,8 @@ func connectToPostgres() (*gorm.DB, error) {
 }
 
 //-----------------------------------------------------------------------------
+// MigrateModels
+//-----------------------------------------------------------------------------
 
 func (a *App) MigrateModels() {
 
@@ -133,6 +143,8 @@ func (a *App) MigrateModels() {
 	a.Log.Info().Msg("Models migrated successfully ✓")
 }
 
+//-----------------------------------------------------------------------------
+// PopulatePostgresDB
 //-----------------------------------------------------------------------------
 
 func (a *App) PopulatePostgresDB() {
@@ -194,6 +206,8 @@ func (a *App) PopulatePostgresDB() {
 }
 
 //-----------------------------------------------------------------------------
+// CreateSuperUser
+//-----------------------------------------------------------------------------
 
 func (a *App) CreateSuperUser() (*uuid.UUID, error) {
 
@@ -252,6 +266,8 @@ func (a *App) CreateSuperUser() (*uuid.UUID, error) {
 }
 
 //-----------------------------------------------------------------------------
+// CreateRoles
+//-----------------------------------------------------------------------------
 
 func (a *App) CreateRoles() error {
 
@@ -279,6 +295,8 @@ func (a *App) CreateRoles() error {
 }
 
 //-----------------------------------------------------------------------------
+// CreateMicroservices
+//-----------------------------------------------------------------------------
 
 func (a *App) CreateMicroservices(aId uuid.UUID) error {
 
@@ -303,6 +321,8 @@ func (a *App) CreateMicroservices(aId uuid.UUID) error {
 	return nil
 }
 
+//-----------------------------------------------------------------------------
+// backupPostgres
 //-----------------------------------------------------------------------------
 
 func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID) error {
@@ -412,6 +432,7 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		SavedBy:        u.Username,
 		Dataset:        0,
 		Mode:           mode,
+		Type:           creds.Type,
 		DBName:         creds.DBUsername,
 		Table:          table,
 		Valid:          true,
@@ -429,29 +450,353 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 }
 
 //-----------------------------------------------------------------------------
+// backupMongo
+//-----------------------------------------------------------------------------
 
-func (a *App) SaveWithAutoVersion(rec *SaveRecord) error {
-	const maxAttempts = 5
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		err := a.DB.Transaction(func(tx *gorm.DB) error {
-			var maxVersion int
-			err := tx.Model(&SaveRecord{}).
-				Where("microservice_id = ?", rec.MicroserviceId).
-				Select("COALESCE(MAX(version), 0)").Scan(&maxVersion).Error
-			if err != nil {
-				return err
-			}
-			rec.Version = maxVersion + 1
-			return tx.Create(rec).Error
-		})
-		if err == nil {
-			return nil
-		}
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-			time.Sleep(10 * time.Millisecond) // tiny backoff, optional
-			continue                          // retry
-		}
-		return err // other error: return immediately
+func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection, mode string, saveId *uuid.UUID) error {
+	// build mongodump args
+	args := []string{
+		"--archive",
 	}
-	return fmt.Errorf("failed to insert SaveRecord for microservice %s after max attempts", rec.MicroserviceId.String())
+	// TODO: fix this properly
+	db = creds.DBName
+
+	if collection != "" {
+		args = append(args, "--collection", collection)
+	}
+
+	key := []byte(os.Getenv("SUPERSECRETKEY"))
+	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
+	pw, err := utils.Decrypt(creds.DBPassword, key, nonce)
+	mus := fmt.Sprintf("--uri=\"mongodb://%s:%s@%s:%s/%s?authSource=%s\"", creds.DBUsername,
+		pw,
+		creds.Host,
+		creds.DBPort,
+		creds.DBName,
+		creds.DBName)
+	args = append(args, mus)
+	a.Log.Debug().Msgf("mongodump args is <<%s>>", args)
+
+	cmd := exec.Command("mongodump", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error from StdoutPipe [%s]", err.Error())
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error from StderrPipe [%s]", err.Error())
+		return err
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			a.Log.Info().Msgf("[mongodump stderr] %s", scanner.Text())
+		}
+	}()
+
+	if err = cmd.Start(); err != nil {
+		a.Log.Info().Msgf("Error starting mongodump [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully started mongodump ✓")
+
+	// Use the same Mongo bucket as for Postgres backups
+	mdb := a.Mongo.Database(db)
+	bucket, err := gridfs.NewBucket(mdb)
+	if err != nil {
+		return err
+	}
+	a.Log.Debug().Msg("Successfully created bucket ✓")
+
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("%s_%s.archive", msId.String(), timestamp)
+
+	uploadStream, err := bucket.OpenUploadStream(
+		filename,
+		options.GridFSUpload().SetMetadata(map[string]interface{}{
+			"created_at": time.Now(),
+			"created_by": u.AdminId.String(),
+			"save_id":    saveId.String(),
+			"ms_id":      msId.String(),
+			"mode":       mode,
+			"db":         db,
+			"collection": collection,
+		}),
+	)
+	if err != nil {
+		a.Log.Info().Msgf("Error opening upload stream [%s]", err.Error())
+		return err
+	}
+	defer uploadStream.Close()
+	a.Log.Debug().Msg("Successfully opened upload stream ✓")
+
+	if _, err = io.Copy(uploadStream, stdout); err != nil {
+		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
+		return err
+	}
+	if err = cmd.Wait(); err != nil {
+		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully streamed MongoDB dump to GridFS ✓")
+
+	sr := SaveRecord{
+		SaveId:         *saveId,
+		MicroserviceId: *msId,
+		CredId:         creds.CredId,
+		SavedBy:        u.Username,
+		Dataset:        0,
+		Mode:           mode,
+		Type:           creds.Type,
+		DBName:         creds.DBUsername,
+		Table:          collection,
+		Valid:          true,
+	}
+
+	if err = a.SaveWithAutoVersion(&sr); err != nil {
+		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
+		return err
+	}
+	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
+
+	// TODO: update creds with last used deets
+
+	return nil
+}
+
+//-----------------------------------------------------------------------------
+// RestoreMongo
+//-----------------------------------------------------------------------------
+
+func (a *App) RestoreMongo(
+	c *gin.Context,
+	svRec *SaveRecord,
+	crdRec *Cred,
+	pw *[]byte,
+	downloadStream *gridfs.DownloadStream,
+) {
+	var err error
+	var stdoutBuf, stderrBuf bytes.Buffer
+
+	// Drop logic using writeMongoOut, like writeSQLOut for Postgres
+	if svRec.Mode == "schema" || svRec.Mode == "all" {
+		if svRec.Table != "" {
+			dropCmd := fmt.Sprintf("db.%s.drop()", svRec.Table)
+			_, err = a.writeMongoOut(c, dropCmd, crdRec, pw)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop collection before restore"})
+				return
+			}
+			a.Log.Debug().Msgf("Dropped collection [%s]", svRec.Table)
+		} else {
+			dropCmd := `db.getCollectionNames().forEach(function(c){db[c].drop();})`
+			_, err = a.writeMongoOut(c, dropCmd, crdRec, pw)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop all collections before restore"})
+				return
+			}
+			a.Log.Debug().Msg("Dropped all collections")
+		}
+	}
+
+	// Prepare mongorestore as before
+	uri := fmt.Sprintf(
+		"mongodb://%s:%s@%s:%s/%s?authSource=%s",
+		crdRec.DBUsername,
+		string(*pw),
+		crdRec.Host,
+		crdRec.DBPort,
+		crdRec.DBName,
+		crdRec.DBName,
+	)
+
+	args := []string{"--uri=" + uri, "--archive"}
+	if svRec.Table != "" {
+		args = append(args, "--nsInclude", fmt.Sprintf("%s.%s", crdRec.DBName, svRec.Table))
+	}
+	a.Log.Debug().Msgf("mongorestore args: %v", args)
+
+	cmd := exec.Command("mongorestore", args...)
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error getting StdinPipe for mongorestore: %s", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error preparing mongorestore"})
+		return
+	}
+	defer stdin.Close()
+
+	if err = cmd.Start(); err != nil {
+		a.Log.Info().Msgf("Error starting mongorestore: %s", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error starting mongorestore"})
+		return
+	}
+	a.Log.Debug().Msg("Started mongorestore ✓")
+
+	n, err := io.Copy(stdin, downloadStream)
+	stdin.Close()
+	a.Log.Debug().Msgf("Copied %d bytes from GridFS to mongorestore stdin", n)
+	if err != nil {
+		a.Log.Info().Msgf("Error streaming to mongorestore: %s", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming to mongorestore"})
+		return
+	}
+	a.Log.Debug().Msg("Closed stdin ✓")
+
+	if err = cmd.Wait(); err != nil {
+		a.Log.Info().Msgf("mongorestore failed: %s", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "mongorestore failed",
+			"stderr":  stderrBuf.String(),
+			"stdout":  stdoutBuf.String(),
+		})
+		return
+	}
+	a.Log.Debug().Msg("mongorestore completed successfully ✓")
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Mongo restore succeeded!",
+		"stderr":   stderrBuf.String(),
+		"stdout":   stdoutBuf.String(),
+		"save_rec": svRec,
+	})
+}
+
+//-----------------------------------------------------------------------------
+// RestorePostgres
+//-----------------------------------------------------------------------------
+
+func (a *App) RestorePostgres(
+	c *gin.Context,
+	svRec *SaveRecord,
+	crdRec *Cred,
+	pw *[]byte,
+	downloadStream *gridfs.DownloadStream, // (can be *gridfs.DownloadStream, but io.Reader is general)
+) {
+	var err error
+	var stdoutBuf, stderrBuf bytes.Buffer
+
+	// Drop/delete logic based on svRec.Mode
+	if svRec.Mode == "schema" || svRec.Mode == "all" {
+		if svRec.Table != "" {
+			dc := fmt.Sprintf("DROP TABLE %s", svRec.Table)
+			_, err = a.writeSQLOut(dc, crdRec, pw, false)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+				return
+			} else {
+				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
+			}
+		} else {
+			var tabs []string
+			tabs, err = a.listTables(crdRec, pw)
+			if err != nil {
+				a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+				return
+			}
+			for _, table := range tabs {
+				a.Log.Debug().Msgf("Table is [%s]", table)
+				dc := fmt.Sprintf("DROP TABLE %s", table)
+				_, err = a.writeSQLOut(dc, crdRec, pw, false)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+					return
+				} else {
+					a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", table)
+				}
+			}
+		}
+	} else if svRec.Mode == "data" {
+		if svRec.Table != "" {
+			dc := fmt.Sprintf("DELETE FROM %s;", svRec.Table)
+			_, err = a.writeSQLOut(dc, crdRec, pw, false)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+				return
+			} else {
+				a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
+			}
+		} else {
+			var tabs []string
+			tabs, err = a.listTables(crdRec, pw)
+			if err != nil {
+				a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+				return
+			}
+			for _, table := range tabs {
+				a.Log.Debug().Msgf("Table is [%s]", table)
+				dc := fmt.Sprintf("DELETE FROM %s;", table)
+				_, err = a.writeSQLOut(dc, crdRec, pw, false)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+					return
+				} else {
+					a.Log.Debug().Msgf("Successfully deleted from table [%s] ✓", table)
+				}
+			}
+		}
+	}
+
+	// build psql arguments
+	args := []string{
+		"-h", crdRec.Host,
+		"-U", crdRec.DBUsername,
+		"-p", crdRec.DBPort,
+		"-d", crdRec.DBName,
+		"-f", "-",
+		"-v", "ON_ERROR_STOP=1",
+	}
+	a.Log.Debug().Msgf("args is <<%s>>", args)
+	cmd := exec.Command("psql", args...)
+	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(*pw))
+	a.Log.Debug().Msg("After exec.Command ✓")
+
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		a.Log.Info().Msgf("WriteCloser error [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went ping"})
+		return
+	}
+	defer stdin.Close()
+	a.Log.Debug().Msg("After defer stdin.Close ✓")
+
+	if err = cmd.Start(); err != nil {
+		a.Log.Info().Msgf("cmd.Start error [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went twang"})
+		return
+	}
+	a.Log.Debug().Msg("After cmd.Start ✓")
+
+	_, err = io.Copy(stdin, downloadStream)
+	if err != nil {
+		a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splash"})
+		return
+	}
+	stdin.Close()
+	a.Log.Debug().Msg("After stdin.Close ✓")
+
+	if err = cmd.Wait(); err != nil {
+		a.Log.Debug().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "psql failed",
+			"stderr":  stderrBuf.String(),
+			"stdout":  stdoutBuf.String(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Postgres restore succeeded!",
+		"stderr":   stderrBuf.String(),
+		"stdout":   stdoutBuf.String(),
+		"save_rec": svRec,
+	})
 }
