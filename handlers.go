@@ -867,10 +867,33 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
+// Fetch metadata about all saves
+//-----------------------------------------------------------------------------
+
+func (a *App) MetadataReport(c *gin.Context) {
+
+	c.JSON(http.StatusNetworkAuthenticationRequired, gin.H{"message": "Plonk!"})
+	return
+}
+
+//-----------------------------------------------------------------------------
 // ListAllSaves
 //-----------------------------------------------------------------------------
 
 func (a *App) ListAllSaves(c *gin.Context) {
+
+	meta := c.Query("meta")
+
+	if meta != "" && meta != "true" {
+		a.Log.Info().Msg("Invalid meta value")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid meta value"})
+		return
+	}
+
+	if meta == "true" {
+		a.MetadataReport(c)
+		return
+	}
 
 	var allSaves []SaveRecord
 	res := a.DB.Find(&allSaves)
@@ -887,6 +910,14 @@ func (a *App) ListAllSaves(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"total_saves": len(allSaves), "saves": allSaves})
 
+}
+
+//-----------------------------------------------------------------------------
+// DeleteByDB
+//-----------------------------------------------------------------------------
+
+func (a *App) DeleteByDB(c *gin.Context) {
+	c.JSON(http.StatusLocked, gin.H{"message": "Danger! Will Smith; Danger!"})
 }
 
 //-----------------------------------------------------------------------------
