@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/cliveyg/poptape-admin/awsutil"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,6 +13,7 @@ type App struct {
 	DB     *gorm.DB
 	Log    *zerolog.Logger
 	Mongo  *mongo.Client
+	AWS    *awsutil.AWSAdmin
 }
 
 func (a *App) InitialiseApp() {
@@ -21,6 +23,7 @@ func (a *App) InitialiseApp() {
 	a.InitialisePostgres()
 	a.PopulatePostgresDB()
 	a.InitialiseMongo()
+	a.InitialiseAWS()
 }
 
 func (a *App) Run(port string) {

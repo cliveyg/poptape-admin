@@ -533,10 +533,12 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 	defer uploadStream.Close()
 	a.Log.Debug().Msg("Successfully opened upload stream ✓")
 
-	if _, err = io.Copy(uploadStream, stdout); err != nil {
+	var n int64
+	if n, err = io.Copy(uploadStream, stdout); err != nil {
 		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
 		return err
 	}
+	a.Log.Debug().Msgf("Copied %d bytes from GridFS to stdin", n)
 	if err = cmd.Wait(); err != nil {
 		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
 		return err
@@ -615,7 +617,8 @@ func (a *App) RestoreMongo(
 
 	args := []string{"--uri=" + uri, "--archive"}
 	if svRec.Table != "" {
-		args = append(args, "--nsInclude", fmt.Sprintf("%s.%s", crdRec.DBName, svRec.Table))
+		//	args = append(args, "--nsInclude", fmt.Sprintf("%s.%s", crdRec.DBName, svRec.Table))
+		args = append(args, "--nsInclude="+fmt.Sprintf("%s.%s", crdRec.DBName, svRec.Table))
 	}
 	a.Log.Debug().Msgf("mongorestore args: %v", args)
 
