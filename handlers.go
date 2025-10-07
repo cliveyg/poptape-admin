@@ -479,7 +479,7 @@ func (a *App) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang"})
 		return
 	}
-	a.Log.Debug().Interface("User", u).Send()
+	//a.Log.Debug().Interface("User", u).Send()
 	c.Set("user", u)
 	res := a.DB.Set("login", true).Set("user", u).Save(&u)
 

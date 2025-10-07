@@ -149,11 +149,16 @@ func (a *App) InitialiseAWS() {
 	ctx := context.Background()
 	awsAdmin, err := awsutil.NewAWSAdmin(ctx, a.Log)
 	if err != nil {
-		a.Log.Fatal().Msg("Failed to initialise AWS ✗")
+		a.Log.Fatal().Err(err).Msg("Failed to initialise AWS ✗")
+	}
+
+	if awsAdmin == nil {
+		a.Log.Fatal().Msg("AWSAdmin is nil after initialization ✗")
 	}
 	a.Log.Info().Msg("AWS connection initialised ✓")
+
 	if err = awsAdmin.TestConnection(ctx); err != nil {
-		a.Log.Fatal().Msg("Failed to connect to AWS ✗")
+		a.Log.Fatal().Err(err).Msg("Failed to connect to AWS ✗")
 	}
 
 	a.Log.Info().Msg("Connected to AWS ✓")

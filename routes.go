@@ -127,9 +127,9 @@ func (a *App) InitialiseRoutes() {
 		a.TestRoute(c)
 	})
 
-	// get aws deets
-	a.Router.GET("/admin/aws/:awsId", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.FetchAWSDetails(c)
+	// get list of all aws poptape standard users
+	a.Router.GET("/admin/aws/users", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin", "poptape_aws"}), func(c *gin.Context) {
+		a.ListAllStandardUsers(c)
 	})
 
 	// wipe entire system - use carefully
