@@ -8,10 +8,35 @@ import (
 )
 
 //-----------------------------------------------------------------------------
+// ListAllPoptapeStandardBuckets
+//-----------------------------------------------------------------------------
 
-func (a *App) ListAllStandardUsers(c *gin.Context) {
+func (a *App) ListAllPoptapeStandardBuckets(c *gin.Context) {
 
-	a.Log.Debug().Msg("-=- ListAllStandardUsers")
+	a.Log.Debug().Msg("ListAllPoptapeStandardBuckets")
+	ctx := c.Request.Context()
+	buckets, err := a.AWS.ListAllStandardBuckets(ctx)
+	if err != nil {
+		a.Log.Info().Msgf("Error listing AWS buckets [%s]", err.Error())
+		if os.Getenv("ENVIRONMENT") == "DEV" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "oopsy"})
+		return
+	}
+
+	nb := len(buckets)
+	c.JSON(http.StatusOK, gin.H{"no_of_buckets": nb, "buckets": buckets})
+}
+
+//-----------------------------------------------------------------------------
+// ListAllPoptapeStandardUsers
+//-----------------------------------------------------------------------------
+
+func (a *App) ListAllPoptapeStandardUsers(c *gin.Context) {
+
+	a.Log.Debug().Msg("ListAllPoptapeStandardUsers")
 	ctx := c.Request.Context()
 	users, err := a.AWS.ListAllUsers(ctx)
 	if err != nil {
@@ -33,4 +58,27 @@ func (a *App) ListAllStandardUsers(c *gin.Context) {
 
 	nu := len(ousers)
 	c.JSON(http.StatusOK, gin.H{"no_of_standard_users": nu, "user_details": ousers})
+}
+
+//-----------------------------------------------------------------------------
+// DeleteAWSUser
+//-----------------------------------------------------------------------------
+
+func (a *App) DeleteAWSUser(c *gin.Context) {
+
+	a.Log.Debug().Msg("DeleteAWSUser")
+	ctx := c.Request.Context()
+	buckets, err := a.AWS.ListAllStandardBuckets(ctx)
+	if err != nil {
+		a.Log.Info().Msgf("Error listing AWS buckets [%s]", err.Error())
+		if os.Getenv("ENVIRONMENT") == "DEV" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "oopsy"})
+		return
+	}
+
+	nb := len(buckets)
+	c.JSON(http.StatusOK, gin.H{"no_of_buckets": nb, "buckets": buckets})
 }

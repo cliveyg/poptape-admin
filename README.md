@@ -1,12 +1,25 @@
 # poptape-admin
 
-This microservice is for administering the overall poptape auction system. i.e. For loading and unloading data into the system. This means this api has direct access to the data in the other poptape microservices i.e. direct access to the postgres amd mongo databases and rabbitmq exchanges.
+This microservice is for administering the overall poptape auction system. i.e. For loading and unloading data into the system. This means this api has direct access to the data in the other poptape microservices i.e. direct access to the Postgres and Mongo databases and rabbitmq exchanges.
 
 I could make this microservice work by calling the other microservices and deleting/creating data that way but on the whole this method is inefficient as the microservices are not designed for bulk additions and deletions. 
 
 However some actions such as creating a new user will use such calls. For example creating a new user will call the *authy* api rather than using direct access as this action calls other api's including external ones and mirroring this process here makes little sense.
 
 Obviously this type of api has an enormous amount of power and the ability to completely blow away all the data in the system. It has its own mini authentication and authorization process.
+
+### Overall Backup Process
+This _poptape-admin_ microservice uses both SQL and NoSQL databases. The NoSQL db is Mongo, configured to use GridFS, to store the output of any backups. 
+All backup data is streamed directly from the outputs of the save tools/binaries into the Mongo db and when restoring, the data is streamed from the GridFS Mongo instance direct to stdin of the tools.
+This is in case the save and restore data become large and don't fit into memory. GridFS was chosen as this can cope with the possibly large files that can be created from backups.
+
+Data/metadata about these saves/backups is stored in the _poptape-admin_ Postgres db.
+
+### Postgres Based Microservices
+All data and schema for Postgres based microservices is backed up by using the external _pg_dump_ binary/cmd and is restored also using an external binary/cmd: _psql_ 
+
+### Mongo Based Microservices
+All data for Mongo based microservices is backed up using the external _mongodump_ binary/cmd and restored using the _mongorestore_ binary/cmd.
 
 ### JWT 
 
