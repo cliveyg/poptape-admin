@@ -57,6 +57,7 @@ func (a *App) InitialiseRoutes() {
 		a.RestoreDBBySaveId(c)
 	})
 
+	// list all saves
 	a.Router.GET("/admin/saves", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.ListAllSaves(c)
 	})
@@ -136,6 +137,7 @@ func (a *App) InitialiseRoutes() {
 		a.SystemWipe(c)
 	})
 
+	// all other routes
 	a.Router.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Resource not found"})
 	})

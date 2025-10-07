@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/cliveyg/poptape-admin/awsutil"
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -11,6 +13,10 @@ import (
 	"os"
 )
 
+//-----------------------------------------------------------------------------
+// InitialiseMiddleWare
+//-----------------------------------------------------------------------------
+
 func (a *App) InitialiseMiddleWare() {
 	a.Log.Info().Msg("Initialising middleware")
 	a.Router.Use(a.LoggingMiddleware())
@@ -18,6 +24,8 @@ func (a *App) InitialiseMiddleWare() {
 	a.Router.Use(a.auditMiddleware())
 }
 
+//-----------------------------------------------------------------------------
+// auditMiddleware
 //-----------------------------------------------------------------------------
 
 func (a *App) auditMiddleware() gin.HandlerFunc {
@@ -30,6 +38,8 @@ func (a *App) auditMiddleware() gin.HandlerFunc {
 	}
 }
 
+//-----------------------------------------------------------------------------
+// authMiddleware
 //-----------------------------------------------------------------------------
 
 func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
@@ -92,6 +102,8 @@ func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
 }
 
 //-----------------------------------------------------------------------------
+// accessControlMiddleware
+//-----------------------------------------------------------------------------
 
 func (a *App) accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 
@@ -118,6 +130,8 @@ func (a *App) accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 }
 
 //-----------------------------------------------------------------------------
+// LoggingMiddleware
+//-----------------------------------------------------------------------------
 
 func (a *App) LoggingMiddleware() gin.HandlerFunc {
 
@@ -125,4 +139,23 @@ func (a *App) LoggingMiddleware() gin.HandlerFunc {
 		a.Log.Info().Msgf("Route [%s]; Method [%s]; IP [%s]", c.Request.URL.Path, c.Request.Method, c.Request.RemoteAddr)
 		c.Next()
 	}
+}
+
+//-----------------------------------------------------------------------------
+// InitialiseAWS
+//-----------------------------------------------------------------------------
+
+func (a *App) InitialiseAWS() {
+	ctx := context.Background()
+	awsAdmin, err := awsutil.NewAWSAdmin(ctx, a.Log)
+	if err != nil {
+		a.Log.Fatal().Msg("Failed to initialise AWS ✗")
+	}
+	a.Log.Info().Msg("AWS connection initialised ✓")
+	if err = awsAdmin.TestConnection(ctx); err != nil {
+		a.Log.Fatal().Msg("Failed to connect to AWS ✗")
+	}
+
+	a.Log.Info().Msg("Connected to AWS ✓")
+	a.AWS = awsAdmin
 }
