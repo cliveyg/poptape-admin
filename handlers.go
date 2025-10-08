@@ -872,7 +872,53 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 
 func (a *App) MetadataReport(c *gin.Context) {
 
-	c.JSON(http.StatusNetworkAuthenticationRequired, gin.H{"message": "Plonk!"})
+	// get all the microservices for which we have a RoleCredMs record.
+	var metas []Metadata
+	//a.DB = a.DB.Debug()
+	sql := `
+		WITH stats AS (
+		  SELECT
+			microservice_id,
+			cred_id,
+			COUNT(*) AS saved_count,
+			SUM(CASE WHEN valid THEN 1 ELSE 0 END) AS valid_count,
+			SUM(CASE WHEN NOT valid THEN 1 ELSE 0 END) AS invalid_count,
+			MAX(version) AS latest_version
+		  FROM save_records
+		  GROUP BY microservice_id, cred_id
+		)
+		SELECT
+		  rcms.microservice_id,
+		  rcms.cred_id,
+		  rcms.role_name,
+		  c.db_name,
+		  c.type,
+		  COALESCE(stats.latest_version, 0) AS latest_version,
+		  sr.save_id AS last_save_id,
+		  COALESCE(stats.saved_count, 0) AS saved_count,
+		  COALESCE(stats.valid_count, 0) AS valid_count,
+		  COALESCE(stats.invalid_count, 0) AS invalid_count
+		FROM role_cred_ms rcms
+		JOIN creds c ON c.cred_id = rcms.cred_id
+		LEFT JOIN stats ON stats.microservice_id = rcms.microservice_id AND stats.cred_id = rcms.cred_id
+		LEFT JOIN save_records sr
+		  ON sr.microservice_id = rcms.microservice_id
+		  AND sr.cred_id = rcms.cred_id
+		  AND sr.version = stats.latest_version
+	`
+	res := a.DB.Raw(sql).Scan(&metas)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("No records found that match criteria!")
+			c.JSON(http.StatusNotFound, gin.H{"message": "No records found that match criteria"})
+			return
+		}
+		a.Log.Info().Msgf("Error collating data [%s]", res.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"no_of_microservices": len(metas), "saved_records_metadata": metas})
 	return
 }
 
@@ -895,6 +941,7 @@ func (a *App) ListAllSaves(c *gin.Context) {
 		return
 	}
 
+	// TODO: Deffo need to paginate this
 	var allSaves []SaveRecord
 	res := a.DB.Find(&allSaves)
 	if res.Error != nil || len(allSaves) == 0 {

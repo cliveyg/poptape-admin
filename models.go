@@ -110,10 +110,10 @@ func (m *Microservice) BeforeCreate(_ *gorm.DB) (err error) {
 // TODO: to be separate
 
 type RoleCredMS struct {
-	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId"`
-	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId"`
+	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid"`
+	CredId         uuid.UUID `json:"cred_id" gorm:"type:uuid"`
 	RoleName       string    `json:"role_name" gorm:"foreignKey:Name"`
-	CreatedBy      uuid.UUID `json:"created_by" gorm:"foreignKey:AdminId"`
+	CreatedBy      uuid.UUID `json:"created_by" gorm:"type:uuid"`
 	Created        time.Time `json:"created"`
 }
 
@@ -153,8 +153,8 @@ func (r *Role) BeforeCreate(_ *gorm.DB) (err error) {
 
 type SaveRecord struct {
 	SaveId         uuid.UUID `json:"save_id" gorm:"type:uuid;primaryKey;"`
-	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"foreignKey:MicroserviceId" binding:"required"`
-	CredId         uuid.UUID `json:"cred_id" gorm:"foreignKey:CredId" binding:"required"`
+	MicroserviceId uuid.UUID `json:"microservice_id" gorm:"type:uuid" binding:"required"`
+	CredId         uuid.UUID `json:"cred_id" gorm:"type:uuid" binding:"required"`
 	DBName         string    `json:"db_name" binding:"required"`
 	Table          string    `json:"table"`
 	SavedBy        string    `json:"savedBy" binding:"required"`
@@ -177,4 +177,19 @@ func (s *SaveRecord) BeforeCreate(_ *gorm.DB) (err error) {
 func (s *SaveRecord) BeforeUpdate(_ *gorm.DB) (err error) {
 	s.Updated = time.Now()
 	return
+}
+
+//-----------------------------------------------------------------------------
+
+type Metadata struct {
+	MicroserviceId uuid.UUID `json:"microservice_id"`
+	CredId         uuid.UUID `json:"cred_id"`
+	RoleName       string    `json:"role_name"`
+	DBName         string    `json:"db_name"`
+	Type           string    `json:"type"`
+	LatestVersion  int       `json:"latest_version"`
+	LastSaveId     uuid.UUID `json:"last_save_id"`
+	SavedCount     int       `json:"saved_count"`
+	ValidCount     int       `json:"valid_count"`
+	InvalidCount   int       `json:"invalid_count"`
 }
