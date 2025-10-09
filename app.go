@@ -9,11 +9,12 @@ import (
 )
 
 type App struct {
-	Router *gin.Engine
-	DB     *gorm.DB
-	Log    *zerolog.Logger
-	Mongo  *mongo.Client
-	AWS    *awsutil.AWSAdmin
+	Router        *gin.Engine
+	DB            *gorm.DB
+	Log           *zerolog.Logger
+	Mongo         *mongo.Client
+	AWS           *awsutil.AWSAdmin
+	CommandRunner CommandRunner
 }
 
 func (a *App) InitialiseApp() {
