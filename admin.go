@@ -66,6 +66,7 @@ func main() {
 	// create and initialise app
 	a := App{}
 	a.Log = &logger
+	a.CommandRunner = &RealCommandRunner{}
 	a.InitialiseApp()
 	a.Run(":" + os.Getenv("PORT"))
 

@@ -26,13 +26,13 @@ func (a *App) ListAllCreds(c *gin.Context) {
 	var crds []Cred
 	res := a.DB.Find(&crds)
 	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No creds found")
-			c.JSON(http.StatusNotFound, gin.H{"message": "No creds found"})
-			return
-		}
 		a.Log.Info().Msgf("Error returning creds [%s]", res.Error.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
+		return
+	}
+	if len(crds) == 0 {
+		a.Log.Info().Msg("No creds found")
+		c.JSON(http.StatusNotFound, gin.H{"message": "No creds found"})
 		return
 	}
 	for i := range crds {
@@ -699,13 +699,13 @@ func (a *App) ListAllRoles(c *gin.Context) {
 
 	res := a.DB.Find(&roles)
 	if res.Error != nil || len(roles) == 0 {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("Microservice table is empty!")
-			c.JSON(http.StatusNotFound, gin.H{"message": "No microservices found"})
-			return
-		}
-		a.Log.Info().Msgf("Error finding microservices [%s]", res.Error)
+		a.Log.Info().Msgf("Error finding roles [%s]", res.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		return
+	}
+	if len(roles) == 0 {
+		a.Log.Info().Msg("Roles table is empty!")
+		c.JSON(http.StatusNotFound, gin.H{"message": "No roles found"})
 		return
 	}
 
@@ -744,17 +744,18 @@ func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
 		res = a.DB.Where("microservice_id = ?", msId.String()).Order("created desc").Find(&saves)
 	}
 	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No saves found")
-			c.JSON(http.StatusNotFound, gin.H{"message": "No saves found"})
-			return
-		}
 		a.Log.Info().Msgf("Error returning saves [%s]", res.Error.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
 		return
 	}
+	ls := len(saves)
+	if ls == 0 {
+		a.Log.Info().Msg("No saves found")
+		c.JSON(http.StatusNotFound, gin.H{"message": "No saves found"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"saves": saves})
+	c.JSON(http.StatusOK, gin.H{"no_of_saves": ls, "saves": saves})
 }
 
 //-----------------------------------------------------------------------------
@@ -944,14 +945,19 @@ func (a *App) ListAllSaves(c *gin.Context) {
 	// TODO: Deffo need to paginate this
 	var allSaves []SaveRecord
 	res := a.DB.Order("db_name asc, version desc").Find(&allSaves)
-	if res.Error != nil || len(allSaves) == 0 {
+	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msg("SaveRecord table is empty!")
 			c.JSON(http.StatusNotFound, gin.H{"message": "No save records found"})
 			return
 		}
-		a.Log.Info().Msgf("Error finding SaveRecord table [%s]", res.Error)
+		a.Log.Info().Msgf("Error returning data from SaveRecord table [%s]", res.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		return
+	}
+	if len(allSaves) == 0 {
+		a.Log.Info().Msg("SaveRecord table is empty!")
+		c.JSON(http.StatusNotFound, gin.H{"message": "No save records found"})
 		return
 	}
 
@@ -1056,8 +1062,9 @@ func (a *App) DeleteSaveById(c *gin.Context) {
 		return
 	}
 	saveId, _ := uuid.Parse(c.Param("saveId"))
+
 	svRec := SaveRecord{SaveId: saveId}
-	res := a.DB.Delete(&svRec)
+	res := a.DB.First(&svRec)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msgf("SaveRecord record not found for id [%s]", saveId)
@@ -1069,6 +1076,28 @@ func (a *App) DeleteSaveById(c *gin.Context) {
 		return
 	}
 
-	m := fmt.Sprintf("Save record [%s] deleted", saveId)
+	// delete from mongodb first
+	a.Log.Info().Msgf("Save id [%s]; db name [%s]", saveId.String(), svRec.DBName)
+	err := a.DeleteGridFSBySaveID(c, saveId.String(), svRec.DBName)
+	if err != nil {
+		a.Log.Info().Msgf("Error deleting data from mongo [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went donk"})
+		return
+	}
+
+	// then delete from postgres
+	res = a.DB.Delete(&svRec)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("SaveRecord record not deleted for id [%s]", saveId)
+			c.JSON(http.StatusNotFound, gin.H{"message": "SaveRecord record not deleted"})
+			return
+		}
+		a.Log.Info().Msgf("Error deleting SaveRecord [%s]", res.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splat"})
+		return
+	}
+
+	m := fmt.Sprintf("Save record [%s] and mongo data deleted", saveId)
 	c.JSON(http.StatusOK, gin.H{"message": m})
 }

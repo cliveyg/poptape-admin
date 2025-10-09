@@ -163,6 +163,7 @@ type SaveRecord struct {
 	Mode           string    `json:"mode" binding:"required"`
 	Valid          bool      `json:"valid" binding:"required"`
 	Type           string    `json:"type" binding:"required"`
+	Size           int64     `json:"size"`
 	Notes          string    `json:"notes"`
 	Created        time.Time `json:"created"`
 	Updated        time.Time `json:"updated"`

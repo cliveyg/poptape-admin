@@ -14,7 +14,6 @@ import (
 	"gorm.io/gorm"
 	"net/http"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
 	"time"
@@ -242,13 +241,12 @@ func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any
 	if tabRet {
 		args = append(args, "-A", "-t")
 	}
-	a.Log.Debug().Msgf("args is <<%s>>", args)
-	cmd := exec.Command("psql", args...)
-	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(*pw))
-	a.Log.Debug().Msg("After exec.Command ✓")
+	cmd := a.CommandRunner.Command("psql", args...)
+	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(*pw)))
+	a.Log.Debug().Msg("After CommandRunner.Command ✓")
 
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	cmd.SetStdout(&stdoutBuf)
+	cmd.SetStderr(&stderrBuf)
 
 	err := cmd.Run()
 	a.Log.Debug().Msgf("STDOUT:\n%s\n", stdoutBuf.String())

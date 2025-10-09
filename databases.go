@@ -10,6 +10,7 @@ import (
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,7 +19,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 )
 
@@ -368,8 +368,8 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 
 	a.Log.Debug().Msgf("args is <<%s>>", args)
 
-	cmd := exec.Command("pg_dump", args...)
-	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(pw))
+	cmd := a.CommandRunner.Command("pg_dump", args...)
+	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(pw)))
 
 	var stdout, stderr io.ReadCloser
 	stdout, err = cmd.StdoutPipe()
@@ -416,10 +416,13 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 	defer uploadStream.Close()
 	a.Log.Debug().Msg("Successfully opened upload stream ✓")
 
-	if _, err = io.Copy(uploadStream, stdout); err != nil {
+	var n int64
+	if n, err = io.Copy(uploadStream, stdout); err != nil {
 		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
 		return err
 	}
+	a.Log.Debug().Msgf("Copied %d bytes to GridFS", n)
+
 	if err = cmd.Wait(); err != nil {
 		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
 		return err
@@ -434,6 +437,7 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		Dataset:        0,
 		Mode:           mode,
 		Type:           creds.Type,
+		Size:           n,
 		DBName:         creds.DBUsername,
 		Table:          table,
 		Valid:          true,
@@ -478,7 +482,7 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 	args = append(args, mus)
 	a.Log.Debug().Msgf("mongodump args is <<%s>>", args)
 
-	cmd := exec.Command("mongodump", args...)
+	cmd := a.CommandRunner.Command("mongodump", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -539,7 +543,7 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
 		return err
 	}
-	a.Log.Debug().Msgf("Copied %d bytes from GridFS to stdin", n)
+	a.Log.Debug().Msgf("Copied %d bytes to GridFS", n)
 	if err = cmd.Wait(); err != nil {
 		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
 		return err
@@ -556,6 +560,7 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 		Type:           creds.Type,
 		DBName:         creds.DBUsername,
 		Table:          collection,
+		Size:           n,
 		Valid:          true,
 	}
 
@@ -623,9 +628,9 @@ func (a *App) RestoreMongo(
 	}
 	a.Log.Debug().Msgf("mongorestore args: %v", args)
 
-	cmd := exec.Command("mongorestore", args...)
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	cmd := a.CommandRunner.Command("mongorestore", args...)
+	cmd.SetStdout(&stdoutBuf)
+	cmd.SetStderr(&stderrBuf)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		a.Log.Info().Msgf("Error getting StdinPipe for mongorestore: %s", err.Error())
@@ -727,25 +732,6 @@ func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, p
 				c.JSON(sc, gin.H{"message": err.Error()})
 				return
 			}
-
-			//var tabs []string
-			//tabs, err = a.listTables(crdRec, pw)
-			//if err != nil {
-			//	a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
-			//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
-			//	return
-			//}
-			//for _, table := range tabs {
-			//	a.Log.Debug().Msgf("Table is [%s]", table)
-			//	dc := fmt.Sprintf("DELETE FROM %s;", table)
-			//	_, err = a.writeSQLOut(dc, crdRec, pw, false)
-			//	if err != nil {
-			//		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-			//		return
-			//	} else {
-			//		a.Log.Debug().Msgf("Successfully deleted from table [%s] ✓", table)
-			//	}
-			//}
 		}
 	}
 
@@ -759,12 +745,12 @@ func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, p
 		"-v", "ON_ERROR_STOP=1",
 	}
 	a.Log.Debug().Msgf("args is <<%s>>", args)
-	cmd := exec.Command("psql", args...)
-	cmd.Env = append(os.Environ(), "PGPASSWORD="+string(*pw))
-	a.Log.Debug().Msg("After exec.Command ✓")
+	cmd := a.CommandRunner.Command("psql", args...)
+	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(*pw)))
+	a.Log.Debug().Msg("After CommandRunner.Command ✓")
 
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	cmd.SetStdout(&stdoutBuf)
+	cmd.SetStderr(&stderrBuf)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -808,6 +794,10 @@ func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, p
 	})
 }
 
+//-----------------------------------------------------------------------------
+// PostgresDeleteAllRecs
+//-----------------------------------------------------------------------------
+
 func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 
 	//var tabs []string
@@ -827,4 +817,49 @@ func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 		}
 	}
 	return http.StatusOK, nil
+}
+
+//-----------------------------------------------------------------------------
+// DeleteGridFSBySaveID
+//-----------------------------------------------------------------------------
+
+func (a *App) DeleteGridFSBySaveID(c *gin.Context, saveID string, dbName string) error {
+
+	filesColl := a.Mongo.Database(dbName).Collection("fs.files")
+	chunksColl := a.Mongo.Database(dbName).Collection("fs.chunks")
+	ctx := c.Request.Context()
+
+	// Find all files with the given save_id
+	cursor, err := filesColl.Find(ctx, bson.M{"metadata.save_id": saveID})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+
+	var fileIDs []interface{}
+	for cursor.Next(ctx) {
+		var fileDoc struct {
+			ID interface{} `bson:"_id"`
+		}
+		if err = cursor.Decode(&fileDoc); err != nil {
+			return err
+		}
+		fileIDs = append(fileIDs, fileDoc.ID)
+	}
+	if err = cursor.Err(); err != nil {
+		return err
+	}
+	if len(fileIDs) == 0 {
+		return errors.New("no files found with given save_id")
+	}
+
+	// Delete files from fs.files
+	_, err = filesColl.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": fileIDs}})
+	if err != nil {
+		return err
+	}
+
+	// Delete corresponding chunks from fs.chunks
+	_, err = chunksColl.DeleteMany(ctx, bson.M{"files_id": bson.M{"$in": fileIDs}})
+	return err
 }

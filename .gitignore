@@ -22,3 +22,4 @@
 !LICENSE
 !aws_handlers.go
 !awsutil/aws_admin.go
+!command_runner.go
