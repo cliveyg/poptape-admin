@@ -69,6 +69,11 @@ func (a *App) InitialiseRoutes() {
 		a.RestoreDBBySaveId(c)
 	})
 
+	// delete specific save id
+	a.Router.DELETE("/admin/data/:saveId", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
+		a.DeleteSaveById(c)
+	})
+
 	// backup specific db
 	a.Router.GET("/admin/save/:msId/:db", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.BackupDB(c)
@@ -130,6 +135,12 @@ func (a *App) InitialiseRoutes() {
 	// list all saves by microservice id
 	a.Router.GET("/admin/microservice/:msId/saves", a.authMiddleware(true), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
 		a.ListAllSavesByMicroservice(c)
+	})
+
+	// clear all data from ms
+	// as it currently stands only admin or super can do this
+	a.Router.GET("/admin/microservice/:msId/wipe", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
+		a.WipeMicroservice(c)
 	})
 
 	//-----------------------------------------------------------------

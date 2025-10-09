@@ -58,6 +58,8 @@ func Encrypt(ptext []byte, key []byte, nonce []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
+//-----------------------------------------------------------------------------
+
 func Decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
 
 	// base64 decode the string into a byte array and decrypt;
@@ -171,11 +173,15 @@ func ValidDataInput(inSt string) error {
 	return nil
 }
 
+//-----------------------------------------------------------------------------
+
 // we run this func before parsing as it's stricter than the parser
-func IsValidUUID(s string) bool {
+func IsValidUUIDString(s string) bool {
 	var uuidRegex = regexp.MustCompile("^[a-fA-F0-9]{8}\\-[a-fA-F0-9]{4}\\-[a-fA-F0-9]{4}\\-[a-fA-F0-9]{4}\\-[a-fA-F0-9]{12}$")
 	return uuidRegex.MatchString(s)
 }
+
+//-----------------------------------------------------------------------------
 
 func IsAcceptedString(s string) bool {
 	var uuidRegex = regexp.MustCompile("^[a-z_]$")
