@@ -284,6 +284,7 @@ func (a *App) CreateRoles() error {
 		{Name: "address"},
 		{Name: "fotos"},
 		{Name: "authy"},
+		{Name: "list"},
 	}
 	res := a.DB.Create(&roles)
 	if res.Error != nil {
@@ -672,13 +673,8 @@ func (a *App) RestoreMongo(
 // RestorePostgres
 //-----------------------------------------------------------------------------
 
-func (a *App) RestorePostgres(
-	c *gin.Context,
-	svRec *SaveRecord,
-	crdRec *Cred,
-	pw *[]byte,
-	downloadStream *gridfs.DownloadStream, // (can be *gridfs.DownloadStream, but io.Reader is general)
-) {
+func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, pw *[]byte, downloadStream *gridfs.DownloadStream) {
+
 	var err error
 	var stdoutBuf, stderrBuf bytes.Buffer
 
@@ -694,6 +690,7 @@ func (a *App) RestorePostgres(
 				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
 			}
 		} else {
+			// TODO: Refactor this
 			var tabs []string
 			tabs, err = a.listTables(crdRec, pw)
 			if err != nil {
@@ -724,24 +721,31 @@ func (a *App) RestorePostgres(
 				a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
 			}
 		} else {
-			var tabs []string
-			tabs, err = a.listTables(crdRec, pw)
+			var sc int
+			sc, err = a.PostgresDeleteAllRecs(crdRec, pw)
 			if err != nil {
-				a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+				c.JSON(sc, gin.H{"message": err.Error()})
 				return
 			}
-			for _, table := range tabs {
-				a.Log.Debug().Msgf("Table is [%s]", table)
-				dc := fmt.Sprintf("DELETE FROM %s;", table)
-				_, err = a.writeSQLOut(dc, crdRec, pw, false)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-					return
-				} else {
-					a.Log.Debug().Msgf("Successfully deleted from table [%s] ✓", table)
-				}
-			}
+
+			//var tabs []string
+			//tabs, err = a.listTables(crdRec, pw)
+			//if err != nil {
+			//	a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
+			//	c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
+			//	return
+			//}
+			//for _, table := range tabs {
+			//	a.Log.Debug().Msgf("Table is [%s]", table)
+			//	dc := fmt.Sprintf("DELETE FROM %s;", table)
+			//	_, err = a.writeSQLOut(dc, crdRec, pw, false)
+			//	if err != nil {
+			//		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
+			//		return
+			//	} else {
+			//		a.Log.Debug().Msgf("Successfully deleted from table [%s] ✓", table)
+			//	}
+			//}
 		}
 	}
 
@@ -802,4 +806,25 @@ func (a *App) RestorePostgres(
 		"stdout":   stdoutBuf.String(),
 		"save_rec": svRec,
 	})
+}
+
+func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
+
+	//var tabs []string
+	tabs, err := a.listTables(crd, pw)
+	if err != nil {
+		a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
+		return http.StatusInternalServerError, errors.New("Error listing tables")
+	}
+	for _, table := range tabs {
+		a.Log.Debug().Msgf("Table is [%s]", table)
+		dc := fmt.Sprintf("DELETE FROM %s;", table)
+		_, err = a.writeSQLOut(dc, crd, pw, false)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		} else {
+			a.Log.Debug().Msgf("Data successfully deleted from table [%s] ✓", table)
+		}
+	}
+	return http.StatusOK, nil
 }

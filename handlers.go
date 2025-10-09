@@ -47,7 +47,7 @@ func (a *App) ListAllCreds(c *gin.Context) {
 
 func (a *App) FetchCredsById(c *gin.Context) {
 
-	if !utils.IsValidUUID(c.Param("cId")) {
+	if !utils.IsValidUUIDString(c.Param("cId")) {
 		a.Log.Info().Msg("Invalid cred id in url")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
@@ -762,7 +762,7 @@ func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) RestoreDBBySaveId(c *gin.Context) {
-	if !utils.IsValidUUID(c.Param("saveId")) {
+	if !utils.IsValidUUIDString(c.Param("saveId")) {
 		a.Log.Info().Msg("Invalid saveId in url")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Not a uuid string"})
 		return
@@ -943,7 +943,7 @@ func (a *App) ListAllSaves(c *gin.Context) {
 
 	// TODO: Deffo need to paginate this
 	var allSaves []SaveRecord
-	res := a.DB.Find(&allSaves)
+	res := a.DB.Order("db_name asc, version desc").Find(&allSaves)
 	if res.Error != nil || len(allSaves) == 0 {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msg("SaveRecord table is empty!")
@@ -984,5 +984,91 @@ func (a *App) SystemWipe(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
-// CCCC
+// WipeMicroservice - clears data and schema from microservice
 //-----------------------------------------------------------------------------
+
+func (a *App) WipeMicroservice(c *gin.Context) {
+
+	if !utils.IsValidUUIDString(c.Param("msId")) {
+		a.Log.Info().Msg("Invalid ms id in url")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+		return
+	}
+	msId := c.Param("msId")
+
+	// get cred record from microservice id via RoleCredMS
+	// should only be 1. might have to revisit
+	var cred Cred
+	res := a.DB.
+		Table("role_cred_ms").
+		Select("creds.*").
+		Joins("join creds on creds.cred_id = role_cred_ms.cred_id").
+		Where("role_cred_ms.microservice_id = ?", msId).
+		First(&cred)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msg("No creds found")
+			c.JSON(http.StatusNotFound, gin.H{"message": "No creds found"})
+			return
+		}
+		a.Log.Info().Msgf("Error returning creds [%s]", res.Error.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
+		return
+	}
+	key := []byte(os.Getenv("SUPERSECRETKEY"))
+	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
+	pw, err := utils.Decrypt(cred.DBPassword, key, nonce)
+	if err != nil {
+		a.Log.Info().Msgf("Error decrypting password from creds [%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error decrypting password from creds"})
+		return
+	}
+
+	if cred.Type == "postgres" {
+		// empty all tables - no need to drop tables
+		sc, err := a.PostgresDeleteAllRecs(&cred, &pw)
+		if err != nil {
+			c.JSON(sc, gin.H{"message": err.Error()})
+			return
+		}
+	} else if cred.Type == "mongo" {
+		dropCmd := `db.getCollectionNames().forEach(function(c){db[c].drop();})`
+		_, err = a.writeMongoOut(c, dropCmd, &cred, &pw)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop all collections before restore"})
+			return
+		}
+		a.Log.Debug().Msg("Dropped all collections")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "wibble"})
+}
+
+//-----------------------------------------------------------------------------
+// DeleteSaveById - delete a particular save
+//-----------------------------------------------------------------------------
+
+func (a *App) DeleteSaveById(c *gin.Context) {
+
+	if !utils.IsValidUUIDString(c.Param("saveId")) {
+		a.Log.Info().Msg("Invalid save id in url")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+		return
+	}
+	saveId, _ := uuid.Parse(c.Param("saveId"))
+	svRec := SaveRecord{SaveId: saveId}
+	res := a.DB.Delete(&svRec)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			a.Log.Info().Msgf("SaveRecord record not found for id [%s]", saveId)
+			c.JSON(http.StatusNotFound, gin.H{"message": "SaveRecord record not found"})
+			return
+		}
+		a.Log.Info().Msgf("Error finding SaveRecord [%s]", res.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went neee"})
+		return
+	}
+
+	m := fmt.Sprintf("Save record [%s] deleted", saveId)
+	c.JSON(http.StatusOK, gin.H{"message": m})
+}

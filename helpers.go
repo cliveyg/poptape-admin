@@ -191,7 +191,7 @@ func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
 //-----------------------------------------------------------------------------
 
 func (a *App) getRoleDetails(c *gin.Context, u *User, rName *string) error {
-	if !utils.IsValidUUID(c.Param("aId")) {
+	if !utils.IsValidUUIDString(c.Param("aId")) {
 		a.Log.Info().Msgf("Invalid aId in url [%s]", c.Param("aId"))
 		return errors.New("Invalid aId in url")
 	}
