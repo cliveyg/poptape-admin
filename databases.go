@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -326,23 +325,11 @@ func (a *App) CreateMicroservices(aId uuid.UUID) error {
 // backupPostgres
 //-----------------------------------------------------------------------------
 
-func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID) error {
-
-	key := []byte(os.Getenv("SUPERSECRETKEY"))
-	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
-	pw, err := utils.Decrypt(creds.DBPassword, key, nonce)
-	if err != nil {
-		a.Log.Info().Msgf("Error decrypting password from creds [%s]", err.Error())
-		return err
-	}
-	a.Log.Debug().Msg("Successfully decrypted password ✓")
-
-	mdb := a.Mongo.Database(db)
-	bucket, err := gridfs.NewBucket(mdb)
+func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID, n *int64) error {
+	pw, err := a.decryptPassword(creds.DBPassword)
 	if err != nil {
 		return err
 	}
-	a.Log.Debug().Msg("Successfully created bucket ✓")
 
 	dso := ""
 	if mode == "schema" {
@@ -351,105 +338,78 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		dso = "--data-only"
 	}
 
-	// build pg_dump arguments
 	args := []string{
 		"-h", creds.Host,
 		"-U", creds.DBUsername,
 		"-p", creds.DBPort,
 	}
 	if table != "" {
-		args = append(args, "-t")
-		args = append(args, table)
+		args = append(args, "-t", table)
 	}
 	if dso != "" {
 		args = append(args, dso)
 	}
 	args = append(args, creds.DBName)
+	a.Log.Debug().Msgf("pg_dump args is <<%s>>", args)
 
-	a.Log.Debug().Msgf("args is <<%s>>", args)
-
-	cmd := a.CommandRunner.Command("pg_dump", args...)
-	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(pw)))
-
-	var stdout, stderr io.ReadCloser
-	stdout, err = cmd.StdoutPipe()
+	env := []string{"PGPASSWORD=" + string(pw)}
+	var cmd Cmd
+	var stdout io.ReadCloser
+	cmd, stdout, err = a.setupAndStartCmd("pg_dump", args, env, "pg_dump")
 	if err != nil {
-		a.Log.Info().Msgf("Error from StdoutPipe [%s]", err.Error())
 		return err
 	}
-
-	stderr, err = cmd.StderrPipe()
-	if err != nil {
-		a.Log.Info().Msgf("Error from StderrPipe [%s]", err.Error())
-		return err
-	}
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			a.Log.Info().Msgf("[pg_dump stderr] %s", scanner.Text())
-		}
-	}()
-
-	if err = cmd.Start(); err != nil {
-		a.Log.Info().Msgf("Error starting cmd [%s]", err.Error())
-		return err
-	}
-	a.Log.Debug().Msg("Successfully started cmd ✓")
 
 	timestamp := time.Now().Format("20060102_150405")
 	filename := fmt.Sprintf("%s_%s.sql", msId.String(), timestamp)
-	var uploadStream *gridfs.UploadStream
-	uploadStream, err = bucket.OpenUploadStream(
-		filename,
-		options.GridFSUpload().SetMetadata(map[string]interface{}{
-			"created_at": time.Now(),
-			"created_by": u.AdminId.String(),
-			"save_id":    saveId.String(),
-			"ms_id":      msId.String(),
-			"mode":       mode,
-		}),
-	)
+
+	metadata := map[string]interface{}{
+		"created_at": time.Now(),
+		"created_by": u.AdminId.String(),
+		"save_id":    saveId.String(),
+		"ms_id":      msId.String(),
+		"mode":       mode,
+		"db":         creds.DBName,
+		"table":      table,
+	}
+
+	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
 	if err != nil {
-		a.Log.Info().Msgf("Error opening upload stream [%s]", err.Error())
 		return err
 	}
 	defer uploadStream.Close()
-	a.Log.Debug().Msg("Successfully opened upload stream ✓")
 
-	var n int64
-	if n, err = io.Copy(uploadStream, stdout); err != nil {
-		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
+	*n, err = a.copyToGridFS(uploadStream, stdout, "pg_dump")
+	if err != nil {
 		return err
 	}
-	a.Log.Debug().Msgf("Copied %d bytes to GridFS", n)
 
-	if err = cmd.Wait(); err != nil {
-		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
+	if err := cmd.Wait(); err != nil {
+		a.Log.Info().Msgf("pg_dump cmd.Wait error [%s]", err.Error())
 		return err
 	}
-	a.Log.Debug().Msg("Successfully streamed data to mongo ✓")
+	a.Log.Debug().Msg("Successfully streamed Postgres dump to GridFS ✓")
 
+	// Create SaveRecord!
 	sr := SaveRecord{
 		SaveId:         *saveId,
 		MicroserviceId: *msId,
 		CredId:         creds.CredId,
+		DBName:         creds.DBName,
+		Table:          table,
 		SavedBy:        u.Username,
+		Version:        0, // will be set by SaveWithAutoVersion
 		Dataset:        0,
 		Mode:           mode,
-		Type:           creds.Type,
-		Size:           n,
-		DBName:         creds.DBUsername,
-		Table:          table,
 		Valid:          true,
+		Type:           creds.Type,
+		Size:           *n,
 	}
-
-	if err = a.SaveWithAutoVersion(&sr); err != nil {
+	if err := a.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}
 	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
-
-	// TODO: update creds with last used deets
 
 	return nil
 }
@@ -458,119 +418,81 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 // backupMongo
 //-----------------------------------------------------------------------------
 
-func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection, mode string, saveId *uuid.UUID) error {
-	// build mongodump args
-	args := []string{
-		"--archive",
+func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection, mode string, saveId *uuid.UUID, n *int64) error {
+	pw, err := a.decryptPassword(creds.DBPassword)
+	if err != nil {
+		return err
 	}
-	// TODO: fix this properly
-	db = creds.DBName
+
+	args := []string{"--archive"}
+	db = creds.DBName // ensure DB name is from creds
 
 	if collection != "" {
 		args = append(args, "--collection", collection)
 	}
 
-	key := []byte(os.Getenv("SUPERSECRETKEY"))
-	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
-	pw, err := utils.Decrypt(creds.DBPassword, key, nonce)
-	mus := fmt.Sprintf("--uri=\"mongodb://%s:%s@%s:%s/%s?authSource=%s\"", creds.DBUsername,
-		pw,
-		creds.Host,
-		creds.DBPort,
-		creds.DBName,
-		creds.DBName)
+	mus := fmt.Sprintf("--uri=\"mongodb://%s:%s@%s:%s/%s?authSource=%s\"",
+		creds.DBUsername, string(pw), creds.Host, creds.DBPort, creds.DBName, creds.DBName)
 	args = append(args, mus)
 	a.Log.Debug().Msgf("mongodump args is <<%s>>", args)
 
-	cmd := a.CommandRunner.Command("mongodump", args...)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		a.Log.Info().Msgf("Error from StdoutPipe [%s]", err.Error())
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		a.Log.Info().Msgf("Error from StderrPipe [%s]", err.Error())
-		return err
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			a.Log.Info().Msgf("[mongodump stderr] %s", scanner.Text())
-		}
-	}()
-
-	if err = cmd.Start(); err != nil {
-		a.Log.Info().Msgf("Error starting mongodump [%s]", err.Error())
-		return err
-	}
-	a.Log.Debug().Msg("Successfully started mongodump ✓")
-
-	// Use the same Mongo bucket as for Postgres backups
-	mdb := a.Mongo.Database(db)
-	bucket, err := gridfs.NewBucket(mdb)
+	var cmd Cmd
+	var stdout io.ReadCloser
+	cmd, stdout, err = a.setupAndStartCmd("mongodump", args, nil, "mongodump")
 	if err != nil {
 		return err
 	}
-	a.Log.Debug().Msg("Successfully created bucket ✓")
 
 	timestamp := time.Now().Format("20060102_150405")
 	filename := fmt.Sprintf("%s_%s.archive", msId.String(), timestamp)
 
-	uploadStream, err := bucket.OpenUploadStream(
-		filename,
-		options.GridFSUpload().SetMetadata(map[string]interface{}{
-			"created_at": time.Now(),
-			"created_by": u.AdminId.String(),
-			"save_id":    saveId.String(),
-			"ms_id":      msId.String(),
-			"mode":       mode,
-			"db":         db,
-			"collection": collection,
-		}),
-	)
+	metadata := map[string]interface{}{
+		"created_at": time.Now(),
+		"created_by": u.AdminId.String(),
+		"save_id":    saveId.String(),
+		"ms_id":      msId.String(),
+		"mode":       mode,
+		"db":         creds.DBName,
+		"collection": collection,
+	}
+
+	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
 	if err != nil {
-		a.Log.Info().Msgf("Error opening upload stream [%s]", err.Error())
 		return err
 	}
 	defer uploadStream.Close()
-	a.Log.Debug().Msg("Successfully opened upload stream ✓")
 
-	var n int64
-	if n, err = io.Copy(uploadStream, stdout); err != nil {
-		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
+	*n, err = a.copyToGridFS(uploadStream, stdout, "mongodump")
+	if err != nil {
 		return err
 	}
-	a.Log.Debug().Msgf("Copied %d bytes to GridFS", n)
+
 	if err = cmd.Wait(); err != nil {
-		a.Log.Info().Msgf("cmd.Wait error [%s]", err.Error())
+		a.Log.Info().Msgf("mongodump cmd.Wait error [%s]", err.Error())
 		return err
 	}
 	a.Log.Debug().Msg("Successfully streamed MongoDB dump to GridFS ✓")
 
+	// Create SaveRecord!
 	sr := SaveRecord{
 		SaveId:         *saveId,
 		MicroserviceId: *msId,
 		CredId:         creds.CredId,
+		DBName:         creds.DBName,
+		Table:          collection, // Table = collection for mongo
 		SavedBy:        u.Username,
+		Version:        0,
 		Dataset:        0,
 		Mode:           mode,
-		Type:           creds.Type,
-		DBName:         creds.DBUsername,
-		Table:          collection,
-		Size:           n,
 		Valid:          true,
+		Type:           creds.Type,
+		Size:           *n,
 	}
-
 	if err = a.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}
 	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
-
-	// TODO: update creds with last used deets
 
 	return nil
 }
@@ -705,7 +627,7 @@ func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, p
 			}
 			for _, table := range tabs {
 				a.Log.Debug().Msgf("Table is [%s]", table)
-				dc := fmt.Sprintf("DROP TABLE %s", table)
+				dc := fmt.Sprintf("DROP TABLE %s CASCADE", table)
 				_, err = a.writeSQLOut(dc, crdRec, pw, false)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})

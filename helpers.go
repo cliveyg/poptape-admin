@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"errors"
@@ -9,9 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"gorm.io/gorm"
+	"io"
 	"net/http"
 	"os"
 	"slices"
@@ -386,4 +389,89 @@ func (a *App) SaveWithAutoVersion(rec *SaveRecord) error {
 		return err
 	}
 	return fmt.Errorf("failed to insert SaveRecord for microservice %s after max attempts", rec.MicroserviceId.String())
+}
+
+//-----------------------------------------------------------------------------
+// decryptPassword
+//-----------------------------------------------------------------------------
+
+func (a *App) decryptPassword(encPw string) ([]byte, error) {
+	key := []byte(os.Getenv("SUPERSECRETKEY"))
+	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
+	pw, err := utils.Decrypt(encPw, key, nonce)
+	if err != nil {
+		a.Log.Info().Msgf("Error decrypting password from creds [%s]", err.Error())
+		return nil, err
+	}
+	a.Log.Debug().Msg("Successfully decrypted password ✓")
+	return pw, nil
+}
+
+//-----------------------------------------------------------------------------
+// setupAndStartCmd
+//-----------------------------------------------------------------------------
+
+func (a *App) setupAndStartCmd(name string, args []string, env []string, logPrefix string) (Cmd, io.ReadCloser, error) {
+	cmd := a.CommandRunner.Command(name, args...)
+	if env != nil {
+		cmd.SetEnv(append(os.Environ(), env...))
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error from StdoutPipe [%s]", err.Error())
+		return nil, nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		a.Log.Info().Msgf("Error from StderrPipe [%s]", err.Error())
+		return nil, nil, err
+	}
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			a.Log.Info().Msgf("[%s stderr] %s", logPrefix, scanner.Text())
+		}
+	}()
+	if err = cmd.Start(); err != nil {
+		a.Log.Info().Msgf("Error starting %s [%s]", logPrefix, err.Error())
+		return nil, nil, err
+	}
+	a.Log.Debug().Msgf("Successfully started %s ✓", logPrefix)
+	return cmd, stdout, nil
+}
+
+//-----------------------------------------------------------------------------
+// createGridFSUploadStream - GridFS bucket and upload stream creation
+//-----------------------------------------------------------------------------
+
+func (a *App) createGridFSUploadStream(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
+	mdb := a.Mongo.Database(db)
+	bucket, err := gridfs.NewBucket(mdb)
+	if err != nil {
+		a.Log.Info().Msgf("Error creating GridFS bucket [%s]", err.Error())
+		return nil, err
+	}
+	a.Log.Debug().Msg("Successfully created bucket ✓")
+	uploadStream, err := bucket.OpenUploadStream(filename, options.GridFSUpload().SetMetadata(metadata))
+	if err != nil {
+		a.Log.Info().Msgf("Error opening upload stream [%s]", err.Error())
+		return nil, err
+	}
+	a.Log.Debug().Msg("Successfully opened upload stream ✓")
+	return uploadStream, nil
+}
+
+//-----------------------------------------------------------------------------
+// copyToGridFS - copy stream and log errors
+//-----------------------------------------------------------------------------
+
+func (a *App) copyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
+	n, err := io.Copy(uploadStream, stdout)
+	if err != nil {
+		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
+		return n, err
+	}
+	a.Log.Debug().Msgf("Copied %d bytes to GridFS for %s", n, logPrefix)
+	return n, nil
 }
