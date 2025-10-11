@@ -1,3 +1,5 @@
+![All tests pass](https://github.com/cliveyg/poptape-admin/actions/workflows/api-tests.yml/badge.svg) ![Tests passed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/cliveyg/c9188881d498a3e609cfcf4875845d9f/raw/422a20cedb3ed99eeb6cee483bbbdd4321400dd4/poptape-admin-go-tests.json&label=Tests) ![Test coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/cliveyg/c9188881d498a3e609cfcf4875845d9f/raw/422a20cedb3ed99eeb6cee483bbbdd4321400dd4/poptape-admin-go-coverage.json&label=Test%20Coverage)
+
 # poptape-admin
 
 This microservice is for administering the overall poptape auction system. i.e. For loading and unloading data into the system. This means this api has direct access to the data in the other poptape microservices i.e. direct access to the Postgres and Mongo databases and rabbitmq exchanges.
