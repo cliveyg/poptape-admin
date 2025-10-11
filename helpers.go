@@ -172,7 +172,7 @@ func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
 	res := a.DB.First(&rcms)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msgf("RoleCredMS not found [%s]", svRec)
+			a.Log.Info().Msgf("RoleCredMS not found [%v]", svRec)
 			return http.StatusNotFound, errors.New("RoleCredMS record not found")
 		}
 		a.Log.Info().Msgf("Error finding RoleCredMS [%s]", res.Error.Error())
@@ -334,7 +334,7 @@ func (a *App) writeMongoOut(c *gin.Context, cmdStr string, crdRec *Cred, pw *[]b
 	// Unknown or unsupported command pattern
 	stderrBuf.WriteString("Could not parse or execute cmdStr: " + cmdStr)
 	a.Log.Info().Msg(stderrBuf.String())
-	return "", fmt.Errorf(stderrBuf.String())
+	return "", errors.New(stderrBuf.String())
 }
 
 //-----------------------------------------------------------------------------

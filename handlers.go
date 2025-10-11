@@ -323,13 +323,13 @@ func (a *App) EditUser(c *gin.Context) {
 	// get the user from request body
 	var ufb User
 	if err = c.ShouldBindJSON(&ufb); err != nil {
-		a.Log.Info().Msgf("Unable to bind input to struc", err.Error())
+		a.Log.Info().Msgf("Unable to bind input to struc [%s]", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
 
 	if adminId != ufb.AdminId {
-		a.Log.Info().Msgf("Admin Id's don't match", err.Error())
+		a.Log.Info().Msgf("Admin Id's don't match [%s]", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
@@ -639,7 +639,7 @@ func (a *App) prepSaveRestore(c *gin.Context, dbName, tabColl, mode *string, cre
 	}
 
 	if *dbName != creds.DBName {
-		a.Log.Info().Msgf("DB name [%s] is incorrect", dbName)
+		a.Log.Info().Msgf("DB name [%v] is incorrect", dbName)
 		return http.StatusNotFound, errors.New("DB name is invalid")
 	}
 

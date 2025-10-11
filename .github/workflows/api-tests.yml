@@ -1,0 +1,149 @@
+name: Build and test
+permissions:
+  contents: read
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 10 * * 1' # run "At 10:00 on Monday"
+
+jobs:
+  unit-tests:
+    name: Run api tests
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:latest
+      volumes:
+        - ${{ github.workspace }}:/app
+    services:
+      # label used to access the service container
+      pdb:
+        image: postgres
+        env:
+          POSTGRES_DB: poptape_admin_test
+          POSTGRES_PASSWORD: "${{ secrets.POSTGRES_TESTDB_PASSWORD }}"
+          POSTGRES_USER: poptape_admin_test
+        ports:
+          # maps tcp port 5432 on service container to the host
+          - 5432:5432
+        # set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mdb:
+        # dockerhub image
+        image: mongo
+        # provide the login and db deets for mongo
+        env:
+          MONGO_INITDB_ROOT_USERNAME: poptape_admin_backups_test
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_TESTDB_ROOT_PASSWORD }}
+          MONGO_INITDB_DATABASE: poptape_admin_backups_test
+        ports:
+          # maps tcp port 27017 on service container to the host
+          - 27017:27017
+        # set health checks to wait until mongo has started
+        options: >-
+          --health-cmd "echo 'db.runCommand("ping").ok' | mongosh --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      # add install ca certs step to prevent tls error messages
+      # when installing golang deps
+      - name: Install ca certs dependency
+        run: |
+          apt-get update && apt-get install --yes --no-install-recommends ca-certificates
+
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Install Go dependencies
+        run: |
+          rm -f go.mod go.sum
+          go mod init github.com/cliveyg/poptape-admin
+          go mod tidy
+
+      # run go build and output binary to dev null as it's not used for running unit tests
+      - name: Run go build
+        run: go build -o /dev/null ./...
+
+      # have to create an .env file to be able to run unit tests
+      - name: Create .env file from github secrets
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+      # run unit tests
+      - name: Run go test and generate test coverage file
+        run: |
+          set -e
+          set -o pipefail
+          touch poptape_admin.log
+          go test -v ./... -cover -coverprofile=./cover.out | tee test.out
+        shell: bash
+
+      # and check test coverage percentage
+      - name: Check test coverage is above threshold
+        env:
+          TESTCOVERAGE_THRESHOLD: 0
+        run: |
+          echo "Checking test coverage is above threshold..."
+          echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
+          totalCoverage=`go tool cover -func=cover.out | grep total | grep -Eo '[0-9]+\.[0-9]+'`
+          echo "Current test coverage : $totalCoverage %"
+          echo "-----------------------------------------------------------"
+          if awk "BEGIN {exit !($totalCoverage >= $TESTCOVERAGE_THRESHOLD)}";
+          then
+              echo "Coverage passed threshold OK"
+          else
+              echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
+              echo "Failed"
+              exit 1
+          fi
+          echo "-----------------------------------------------------------"
+      - name: List missed coverage lines
+        shell: bash
+        run: |
+          go test -coverprofile=coverage.out ./...
+          echo "Missed lines:"
+          awk '
+            BEGIN { OFS=" " }
+            /^mode:/ { next }
+            {
+              for (i = 1; i <= NF; i += 4) {
+                block = $i
+                stmts = $(i+1)
+                count = $(i+2)
+                if (count == "0") {
+                  split(block, parts, ":")
+                  file = parts[1]
+                  rest = parts[2]
+                  split(rest, lines, ",")
+                  start = lines[1]
+                  end = lines[2]
+                  split(start, start_parts, ".")
+                  split(end, end_parts, ".")
+                  start_line = start_parts[1]
+                  end_line = end_parts[1]
+                  if (start_line == end_line) {
+                    print file ":" start_line
+                  } else {
+                    print file ":" start_line "-" end_line
+                  }
+                }
+              }
+            }
+          ' coverage.out
+
+      - name: Create coverage badges
+        uses: gaelgirodon/ci-badges-action@v1
+        with:
+          gist-id: c9188881d498a3e609cfcf4875845d9f
+          token: ${{ secrets.GIST_TOKEN }}
