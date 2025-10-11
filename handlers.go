@@ -524,23 +524,24 @@ func (a *App) BackupDB(c *gin.Context) {
 		return
 	}
 
+	var n int64
 	if creds.Type == "postgres" {
-		if err = a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
+		if err = a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId, &n); err != nil {
 			a.Log.Info().Msgf("Error backing up db [%s]", err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up Postgres"})
 			return
 		}
 		var m string
 		if tabColl != "" {
-			m = fmt.Sprintf("Table [%s] from [%s] db saved", tabColl, dbName)
+			m = fmt.Sprintf("Table [%s] from [%s] postgres db saved", tabColl, dbName)
 		} else {
-			m = fmt.Sprintf("[%s] db saved", dbName)
+			m = fmt.Sprintf("[%s] postgres db saved", dbName)
 		}
-		c.JSON(http.StatusCreated, gin.H{"message": m, "save_id": saveId.String()})
+		c.JSON(http.StatusCreated, gin.H{"message": m, "no_of_bytes": n, "save_id": saveId.String()})
 		return
 	}
 	if creds.Type == "mongo" {
-		if err := a.backupMongo(&creds, &msId, &u, dbName, tabColl, mode, &saveId); err != nil {
+		if err := a.backupMongo(&creds, &msId, &u, dbName, tabColl, mode, &saveId, &n); err != nil {
 			a.Log.Info().Msgf("Error backing up MongoDB [%s]", err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up MongoDB"})
 			return
@@ -551,7 +552,7 @@ func (a *App) BackupDB(c *gin.Context) {
 		} else {
 			m = fmt.Sprintf("[%s] mongo db saved", dbName)
 		}
-		c.JSON(http.StatusCreated, gin.H{"message": m, "save_id": saveId.String()})
+		c.JSON(http.StatusCreated, gin.H{"message": m, "no_of_bytes": n, "save_id": saveId.String()})
 		return
 	}
 
