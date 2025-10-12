@@ -15,16 +15,19 @@ import (
 // MongoDB helpers
 
 func TestMongoClient(t *testing.T) *mongo.Client {
-	uri := fmt.Sprintf(
-		"mongodb://%s:%s@%s:%s",
-		os.Getenv("MONGO_USERNAME"),
-		os.Getenv("MONGO_PASSWORD"),
-		os.Getenv("MONGO_HOST"),
-		os.Getenv("MONGO_PORT"),
+	mongoHost := os.Getenv("MONGO_HOST")
+	mongoPort := os.Getenv("MONGO_PORT")
+	mongoDB := os.Getenv("MONGO_DBNAME")
+	mongoUser := os.Getenv("MONGO_USERNAME")
+	mongoPass := os.Getenv("MONGO_PASSWORD")
+
+	// Build MongoDB URI
+	mongoURI := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=admin",
+		mongoUser, mongoPass, mongoHost, mongoPort, mongoDB,
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		t.Fatalf("Failed to connect to mongo: %v", err)
 	}
