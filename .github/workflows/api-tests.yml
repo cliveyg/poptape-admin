@@ -84,6 +84,10 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
 
+      - name: Copy .env into all package directories
+        run: |
+          find . -type d -exec cp .env {}/.env \;
+
       - name: List files in /app before test
         run: |
           ls -al /app
