@@ -8,7 +8,11 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	testutils.LoadEnv(&testing.T{})
+	if err := testutils.LoadEnv(); err != nil {
+		// Print error for CI logs
+		println("Could not load .env file:", err.Error())
+		os.Exit(1)
+	}
 	code := m.Run()
 	os.Exit(code)
 }
