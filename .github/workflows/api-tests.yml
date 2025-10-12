@@ -83,10 +83,8 @@ jobs:
 
       - name: Print DB connection environment variables
         run: |
-          echo "POSTGRES_USERNAME=$POSTGRES_USERNAME"
-          echo "POSTGRES_DBNAME=$POSTGRES_DBNAME"
-          echo "POSTGRES_HOST=$POSTGRES_HOST"
-          echo "POSTGRES_PORT=$POSTGRES_PORT"
+          echo "POSTGRES_USER=$POSTGRES_USER"
+          echo "POSTGRES_DB=$POSTGRES_DB"
         shell: bash
 
       # run unit tests
