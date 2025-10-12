@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -22,9 +23,9 @@ func TestHarnessSmokeTest(t *testing.T) {
 
 	// MongoDB: Create dummy collection in test db, then drop it
 	client := testutils.TestMongoClient(t)
-	defer func() { _ = client.Disconnect(nil) }()
+	defer func() { _ = client.Disconnect(context.Background()) }()
 	db := client.Database(msName)
-	if err := db.CreateCollection(nil, "fs.files"); err != nil {
+	if err := db.CreateCollection(context.Background(), "fs.files"); err != nil {
 		t.Fatalf("Failed to create dummy collection: %v", err)
 	}
 	testutils.DropTestMongoDatabases(t, client, "test_microservice")
