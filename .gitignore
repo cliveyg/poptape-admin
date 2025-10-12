@@ -24,3 +24,5 @@
 !awsutil/aws_admin.go
 !command_runner.go
 !.github/workflows/api-tests.yml
+!testutils/*
+!integration/*
