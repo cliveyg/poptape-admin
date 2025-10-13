@@ -55,7 +55,8 @@ func resetDB(t *testing.T, a *app.App) {
 		"microservices",
 	}
 
-	// Truncate all tables (CASCADE handles FKs)
+	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-= resetDB =-=-=-=-=-=-=-=-=-=-=-=-=-=-")
+
 	for _, table := range tables {
 		if a.DB.Migrator().HasTable(table) {
 			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
@@ -68,7 +69,7 @@ func resetDB(t *testing.T, a *app.App) {
 			}
 		}
 	}
-	a.Log.Info().Msg("All tables cleared")
+	a.Log.Debug().Msg("All tables cleared")
 
 	// Reseed: roles
 	if err := a.CreateRoles(); err != nil {

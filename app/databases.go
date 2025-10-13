@@ -290,7 +290,7 @@ func (a *App) CreateRoles() error {
 		return res.Error
 	}
 
-	a.Log.Info().Msg("Roles created ✓")
+	a.Log.Debug().Msg("Roles created ✓")
 	return nil
 }
 
@@ -317,7 +317,7 @@ func (a *App) CreateMicroservices(aId uuid.UUID) error {
 		return res.Error
 	}
 
-	a.Log.Info().Msg("Microservices created ✓")
+	a.Log.Debug().Msg("Microservices created ✓")
 	return nil
 }
 
