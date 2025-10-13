@@ -55,7 +55,9 @@ func setupLogger() *zerolog.Logger {
 }
 
 func TestMain(m *testing.M) {
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
 	a := &app.App{}
 	a.Log = setupLogger()
