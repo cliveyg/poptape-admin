@@ -30,6 +30,8 @@ func setupLogger() *zerolog.Logger {
 	}
 
 	logger := zerolog.New(cw).With().Timestamp().Caller().Logger()
+	// set log level
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	return &logger
 }
 
@@ -66,6 +68,7 @@ func resetDB(t *testing.T, a *app.App) {
 			}
 		}
 	}
+	a.Log.Info().Msg("All tables cleared")
 
 	// Reseed: roles
 	if err := a.CreateRoles(); err != nil {
@@ -94,4 +97,5 @@ func resetDB(t *testing.T, a *app.App) {
 			panic(fmt.Sprintf("Failed to reseed microservices: %v", err))
 		}
 	}
+	a.Log.Info().Msg("Everything reseeded")
 }
