@@ -18,7 +18,7 @@ import (
 //-----------------------------------------------------------------------------
 
 func (a *App) InitialiseMiddleWare() {
-	a.Log.Info().Msg("Initialising middleware")
+	a.Log.Debug().Msg("Initialising middleware")
 	a.Router.Use(a.LoggingMiddleware())
 	a.Router.Use(gin.Recovery())
 	a.Router.Use(a.auditMiddleware())
@@ -136,7 +136,7 @@ func (a *App) accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 func (a *App) LoggingMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-		a.Log.Info().Msgf("Route [%s]; Method [%s]; IP [%s]", c.Request.URL.Path, c.Request.Method, c.Request.RemoteAddr)
+		a.Log.Debug().Msgf("Route [%s]; Method [%s]; IP [%s]", c.Request.URL.Path, c.Request.Method, c.Request.RemoteAddr)
 		c.Next()
 	}
 }
@@ -155,12 +155,12 @@ func (a *App) InitialiseAWS() {
 	if awsAdmin == nil {
 		a.Log.Fatal().Msg("AWSAdmin is nil after initialization ✗")
 	}
-	a.Log.Info().Msg("AWS connection initialised ✓")
+	a.Log.Debug().Msg("AWS connection initialised ✓")
 
 	if err = awsAdmin.TestConnection(ctx); err != nil {
 		a.Log.Fatal().Err(err).Msg("Failed to connect to AWS ✗")
 	}
 
-	a.Log.Info().Msg("Connected to AWS ✓")
+	a.Log.Debug().Msg("Connected to AWS ✓")
 	a.AWS = awsAdmin
 }

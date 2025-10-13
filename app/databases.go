@@ -45,7 +45,7 @@ func (a *App) InitialiseMongo() {
 	)
 
 	for time.Since(start) < timeout {
-		a.Log.Info().Msgf("Trying to connect to MongoDB...[%d]", x)
+		a.Log.Debug().Msgf("Trying to connect to MongoDB...[%d]", x)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		clientOptions := options.Client().ApplyURI(mongoURI)
 		client, err = mongo.Connect(ctx, clientOptions)
@@ -67,7 +67,7 @@ func (a *App) InitialiseMongo() {
 	}
 
 	a.Mongo = client
-	a.Log.Info().Msg("Connected to MongoDB successfully ✓")
+	a.Log.Debug().Msg("Connected to MongoDB successfully ✓")
 }
 
 //-----------------------------------------------------------------------------
@@ -85,7 +85,7 @@ func (a *App) InitialisePostgres() {
 	var err error
 	x := 1
 	for time.Since(start) < timeout {
-		a.Log.Info().Msgf("Trying to connect to db...[%d]", x)
+		a.Log.Debug().Msgf("Trying to connect to db...[%d]", x)
 		a.DB, err = a.connectToPostgres()
 		if err == nil {
 			break
@@ -99,7 +99,7 @@ func (a *App) InitialisePostgres() {
 		a.Log.Fatal().Msgf("Failed to connect to the database after %s seconds", timeout)
 	}
 
-	a.Log.Info().Msg("Connected to db successfully ✓")
+	a.Log.Debug().Msg("Connected to db successfully ✓")
 	a.MigrateModels()
 }
 
@@ -129,7 +129,7 @@ func (a *App) connectToPostgres() (*gorm.DB, error) {
 
 func (a *App) MigrateModels() {
 
-	a.Log.Info().Msg("Migrating models")
+	a.Log.Debug().Msg("Migrating models")
 	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
@@ -139,7 +139,7 @@ func (a *App) MigrateModels() {
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
-	a.Log.Info().Msg("Models migrated successfully ✓")
+	a.Log.Debug().Msg("Models migrated successfully ✓")
 }
 
 //-----------------------------------------------------------------------------
@@ -153,14 +153,14 @@ func (a *App) PopulatePostgresDB() {
 
 	if a.DB.Migrator().HasTable(&Role{}) {
 		if err404 := a.DB.First(&Role{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No roles found. Creating roles")
+			a.Log.Debug().Msg("No roles found. Creating roles")
 			err = a.CreateRoles()
 			if err != nil {
 				a.Log.Error().Msgf("Unable to create roles [%s]", err.Error())
 				a.Log.Fatal().Msg("Exiting...")
 			}
 		} else {
-			a.Log.Info().Msg("[Roles] table already populated ✓")
+			a.Log.Debug().Msg("[Roles] table already populated ✓")
 		}
 	} else {
 		a.Log.Fatal().Msg("[Roles] table not found")
@@ -169,14 +169,14 @@ func (a *App) PopulatePostgresDB() {
 	var usr User
 	if a.DB.Migrator().HasTable(&User{}) {
 		if err404 := a.DB.First(&usr).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No users found. Creating user")
+			a.Log.Debug().Msg("No users found. Creating user")
 			aId, err = a.CreateSuperUser()
 			if err != nil {
 				a.Log.Error().Msg("Unable to create first user")
 				a.Log.Fatal().Msg(err.Error())
 			}
 		} else {
-			a.Log.Info().Msg("[Users] table already populated ✓")
+			a.Log.Debug().Msg("[Users] table already populated ✓")
 		}
 	} else {
 		a.Log.Fatal().Msg("[Users] table not found")
@@ -189,14 +189,14 @@ func (a *App) PopulatePostgresDB() {
 	// this step relies on superuser existing
 	if a.DB.Migrator().HasTable(&Microservice{}) {
 		if err404 := a.DB.First(&Microservice{}).Error; errors.Is(err404, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msg("No microservices found. Creating microservices")
+			a.Log.Debug().Msg("No microservices found. Creating microservices")
 			err = a.CreateMicroservices(*aId)
 			if err != nil {
 				a.Log.Error().Msgf("Unable to create microservices [%s]", err.Error())
 				a.Log.Fatal().Msg("Exiting...")
 			}
 		} else {
-			a.Log.Info().Msg("[Microservices] table already populated ✓")
+			a.Log.Debug().Msg("[Microservices] table already populated ✓")
 		}
 	} else {
 		a.Log.Fatal().Msg("[Microservices] table not found")
