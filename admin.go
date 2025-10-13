@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/cliveyg/poptape-admin/app"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"log"
@@ -64,9 +65,9 @@ func main() {
 	}
 
 	// create and initialise app
-	a := App{}
+	a := app.App{}
 	a.Log = &logger
-	a.CommandRunner = &RealCommandRunner{}
+	a.CommandRunner = &app.RealCommandRunner{}
 	a.InitialiseApp()
 	a.Run(":" + os.Getenv("PORT"))
 

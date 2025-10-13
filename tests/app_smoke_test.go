@@ -1,19 +1,19 @@
-package integration
+package tests
 
 import (
 	"context"
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"os"
 	"testing"
-
-	"github.com/cliveyg/poptape-admin/testutils"
 )
 
 func TestMain(m *testing.M) {
-	if err := testutils.LoadEnv(); err != nil {
-		// Print error for CI logs
-		println("Could not load .env file:", err.Error())
-		os.Exit(1)
-	}
+	a := &app.App{}
+	a.InitialisePostgres()
+	a.PopulatePostgresDB()
+	a.InitialiseMongo()
+	// ... any other setup
 	code := m.Run()
 	os.Exit(code)
 }
