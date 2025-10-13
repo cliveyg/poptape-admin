@@ -1,0 +1,101 @@
+package tests
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/rs/zerolog"
+)
+
+func setupLogger() *zerolog.Logger {
+	var logWriter = os.Stdout
+	cw := zerolog.ConsoleWriter{Out: logWriter, NoColor: true, TimeFormat: time.RFC3339}
+	cw.FormatLevel = func(i interface{}) string {
+		return strings.ToUpper(fmt.Sprintf("[ %-6s]", i))
+	}
+	cw.TimeFormat = "[" + time.RFC3339 + "] - "
+	cw.FormatCaller = func(i interface{}) string {
+		str, _ := i.(string)
+		return fmt.Sprintf("['%s']", str)
+	}
+	cw.PartsOrder = []string{
+		zerolog.LevelFieldName,
+		zerolog.TimestampFieldName,
+		zerolog.MessageFieldName,
+		zerolog.CallerFieldName,
+	}
+
+	logger := zerolog.New(cw).With().Timestamp().Caller().Logger()
+	// set log level
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	return &logger
+}
+
+// Call this at the start of every test to get a fresh, seeded app instance.
+func setupTestApp(t *testing.T) *app.App {
+	a := &app.App{}
+	a.Log = setupLogger()
+	a.CommandRunner = &app.RealCommandRunner{}
+	a.InitialiseApp() // runs migrations and seeds roles, superuser, microservices, etc.
+	return a
+}
+
+func resetDB(t *testing.T, a *app.App) {
+	// List all tables you want to clear.
+	tables := []string{
+		"saverecords",
+		"creds",
+		"role_cred_ms",
+		"users",
+		"roles",
+		"microservices",
+	}
+
+	// Truncate all tables (CASCADE handles FKs)
+	for _, table := range tables {
+		if a.DB.Migrator().HasTable(table) {
+			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			if err := a.DB.Exec(stmt).Error; err != nil {
+				if t != nil {
+					t.Fatalf("Failed to truncate table %s: %v", table, err)
+				} else {
+					panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
+				}
+			}
+		}
+	}
+	a.Log.Info().Msg("All tables cleared")
+
+	// Reseed: roles
+	if err := a.CreateRoles(); err != nil {
+		if t != nil {
+			t.Fatalf("Failed to reseed roles: %v", err)
+		} else {
+			panic(fmt.Sprintf("Failed to reseed roles: %v", err))
+		}
+	}
+
+	// Reseed: superuser
+	adminId, err := a.CreateSuperUser()
+	if err != nil {
+		if t != nil {
+			t.Fatalf("Failed to reseed superuser: %v", err)
+		} else {
+			panic(fmt.Sprintf("Failed to reseed superuser: %v", err))
+		}
+	}
+
+	// Reseed: microservices
+	if err := a.CreateMicroservices(*adminId); err != nil {
+		if t != nil {
+			t.Fatalf("Failed to reseed microservices: %v", err)
+		} else {
+			panic(fmt.Sprintf("Failed to reseed microservices: %v", err))
+		}
+	}
+	a.Log.Info().Msg("Everything reseeded")
+}
