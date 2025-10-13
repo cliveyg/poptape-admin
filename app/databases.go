@@ -116,14 +116,6 @@ func (a *App) connectToPostgres() (*gorm.DB, error) {
 		os.Getenv("POSTGRES_HOST"),
 		os.Getenv("POSTGRES_PORT"),
 	)
-	testy := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
-		os.Getenv("POSTGRES_USERNAME"),
-		"TOPSECRETPASS",
-		os.Getenv("POSTGRES_DBNAME"),
-		os.Getenv("POSTGRES_HOST"),
-		os.Getenv("POSTGRES_PORT"),
-	)
-	a.Log.Info().Msgf("Testy DSN is [%s]", testy)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err

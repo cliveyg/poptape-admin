@@ -11,32 +11,19 @@ import (
 	"time"
 )
 
-func main() {
-
-	var err error
-	err = godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	// setup logging - for some reason we have to do this here
-	// when abstracted into another method it doesn't seem to work
-	var logFile *os.File
-
-	filePathName := os.Getenv("LOGFILE")
-	logFile, err = os.OpenFile(filePathName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(logFile *os.File) {
-		err := logFile.Close()
-		if err != nil {
-			log.Fatal(err)
+func setupLogger() *zerolog.Logger {
+	var logWriter = os.Stdout
+	if logFileName := os.Getenv("LOGFILE"); logFileName != "" {
+		logFile, err := os.OpenFile(logFileName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+		if err == nil {
+			logWriter = logFile
+			// If you want to close logFile at the end, you can add logic here
+		} else {
+			log.Printf("Could not open log file %s, using stdout: %v", logFileName, err)
 		}
-	}(logFile)
+	}
 
-	// format logline
-	cw := zerolog.ConsoleWriter{Out: logFile, NoColor: true, TimeFormat: time.RFC3339}
+	cw := zerolog.ConsoleWriter{Out: logWriter, NoColor: true, TimeFormat: time.RFC3339}
 	cw.FormatLevel = func(i interface{}) string {
 		return strings.ToUpper(fmt.Sprintf("[ %-6s]", i))
 	}
@@ -52,23 +39,29 @@ func main() {
 		zerolog.CallerFieldName,
 	}
 
-	// create log
 	logger := zerolog.New(cw).With().Timestamp().Caller().Logger()
-	logger.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-")
-	logger.Info().Msg("Logging setup successfully ✓")
-	if os.Getenv("LOGLEVEL") == "debug" {
+
+	// Set log level
+	switch os.Getenv("LOGLEVEL") {
+	case "debug":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else if os.Getenv("LOGLEVEL") == "info" {
+	case "info":
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	} else {
+	default:
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 	}
+	return &logger
+}
 
-	// create and initialise app
-	a := app.App{}
-	a.Log = &logger
+func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	a := &app.App{}
+	a.Log = setupLogger()
 	a.CommandRunner = &app.RealCommandRunner{}
+
 	a.InitialiseApp()
 	a.Run(":" + os.Getenv("PORT"))
-
 }
