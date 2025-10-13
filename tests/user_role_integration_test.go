@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/app"
@@ -36,6 +37,32 @@ func loginAndGetToken(t *testing.T, username, password string) string {
 func setUserValidated(t *testing.T, username string) {
 	result := TestApp.DB.Model(&app.User{}).Where("username = ?", username).Update("validated", true)
 	require.NoError(t, result.Error)
+}
+
+func TestSuperuserLogin(t *testing.T) {
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
+	require.NotNil(t, TestApp, "TestApp must be set up by TestMain/init")
+
+	loginReq := map[string]string{
+		"username": superUser,
+		"password": base64.StdEncoding.EncodeToString([]byte(superPass)),
+	}
+	body, _ := json.Marshal(loginReq)
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, "superuser login should return 200")
+
+	var out struct {
+		Token string `json:"token"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&out))
+	require.NotEmpty(t, out.Token)
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
