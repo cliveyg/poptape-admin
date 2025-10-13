@@ -91,6 +91,7 @@ jobs:
       # run unit tests with accurate coverage
       - name: Run go test and generate test coverage file (all packages)
         working-directory: /
+        shell: bash
         run: |
           set -e
           set -o pipefail
@@ -101,6 +102,7 @@ jobs:
       # and check test coverage percentage
       - name: Check test coverage is above threshold
         working-directory: /app
+        shell: bash
         env:
           TESTCOVERAGE_THRESHOLD: 0
         run: |
@@ -121,6 +123,7 @@ jobs:
 
       - name: List missed coverage lines
         working-directory: /app
+        shell: bash
         run: |
           echo "Missed lines:"
           awk '
