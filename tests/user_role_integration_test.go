@@ -181,3 +181,135 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusUnauthorized, w2.Code, "login with wrong password should return 401")
 }
+
+// --- Failure tests for CreateUser (handlers.go) ---
+
+func TestCreateUser_Fail_BadJSON(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Send invalid JSON
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewBufferString("{invalid-json}"))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request [1]")
+}
+
+func TestCreateUser_Fail_PasswordsDontMatch(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	userReq := map[string]string{
+		"username":         "failuser_" + RandString(8),
+		"password":         base64.StdEncoding.EncodeToString([]byte("pw1")),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte("pw2")),
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Passwords don't match")
+}
+
+func TestCreateUser_Fail_BadBase64Password(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	userReq := map[string]string{
+		"username":         "failuser_" + RandString(8),
+		"password":         "!!notbase64!!",
+		"confirm_password": "!!notbase64!!",
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad base64 encoding")
+}
+
+func TestCreateUser_Fail_DBCreateError_DuplicateUsername(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	// First create a user
+	username := "dupuser_" + RandString(8)
+	password := base64.StdEncoding.EncodeToString([]byte("pw1"))
+	userReq := map[string]string{
+		"username":         username,
+		"password":         password,
+		"confirm_password": password,
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	// Try to create the same user again to cause unique constraint violation (DB error)
+	req2, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req2.Header.Set("y-access-token", token)
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusInternalServerError, w2.Code)
+	require.Contains(t, w2.Body.String(), "Something went bang [1]")
+}
+
+// Note: For "DB validate error" branch (the Save after creation), this is difficult to simulate in a black-box integration test
+// without complex DB-level manipulation or custom build hooks. If needed, document this coverage limitation.
+
+func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	userReq := map[string]string{
+		"username":         "headeruser_" + RandString(8),
+		"password":         base64.StdEncoding.EncodeToString([]byte("pw1")),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte("pw1")),
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	require.NotEmpty(t, w.Header().Get("y-access-token"))
+}
