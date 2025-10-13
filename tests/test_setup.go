@@ -41,3 +41,57 @@ func setupTestApp(t *testing.T) *app.App {
 	a.InitialiseApp() // runs migrations and seeds roles, superuser, microservices, etc.
 	return a
 }
+
+func resetDB(t *testing.T, a *app.App) {
+	// List all tables you want to clear.
+	tables := []string{
+		"saverecords",
+		"creds",
+		"role_cred_ms",
+		"users",
+		"roles",
+		"microservices",
+	}
+
+	// Truncate all tables (CASCADE handles FKs)
+	for _, table := range tables {
+		if a.DB.Migrator().HasTable(table) {
+			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			if err := a.DB.Exec(stmt).Error; err != nil {
+				if t != nil {
+					t.Fatalf("Failed to truncate table %s: %v", table, err)
+				} else {
+					panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
+				}
+			}
+		}
+	}
+
+	// Reseed: roles
+	if err := a.CreateRoles(); err != nil {
+		if t != nil {
+			t.Fatalf("Failed to reseed roles: %v", err)
+		} else {
+			panic(fmt.Sprintf("Failed to reseed roles: %v", err))
+		}
+	}
+
+	// Reseed: superuser
+	adminId, err := a.CreateSuperUser()
+	if err != nil {
+		if t != nil {
+			t.Fatalf("Failed to reseed superuser: %v", err)
+		} else {
+			panic(fmt.Sprintf("Failed to reseed superuser: %v", err))
+		}
+	}
+
+	// Reseed: microservices
+	if err := a.CreateMicroservices(*adminId); err != nil {
+		if t != nil {
+			t.Fatalf("Failed to reseed microservices: %v", err)
+		} else {
+			panic(fmt.Sprintf("Failed to reseed microservices: %v", err))
+		}
+	}
+}

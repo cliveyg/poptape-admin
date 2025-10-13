@@ -1,16 +1,25 @@
 package tests
 
 import (
-	"github.com/joho/godotenv"
-	"log"
 	"os"
 	"testing"
+
+	"github.com/cliveyg/poptape-admin/app"
 )
 
-// This is optional if you want to load env vars for your tests.
+var TestApp *app.App
+
 func TestMain(m *testing.M) {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	os.Exit(m.Run())
+	TestApp = &app.App{}
+	TestApp.Log = setupLogger()
+	TestApp.CommandRunner = &app.RealCommandRunner{}
+
+	// 1. Migrate schema (creates tables)
+	TestApp.InitialiseApp()
+
+	// 2. Truncate and reseed database
+	resetDB(nil, TestApp)
+
+	code := m.Run()
+	os.Exit(code)
 }
