@@ -5,57 +5,47 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"os"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/stretchr/testify/require"
 )
 
-// Helper: login as the given user and return JWT token string
-func loginAndGetToken(t *testing.T, serverURL, username, password string) string {
+func loginAndGetToken(t *testing.T, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
 		"password": base64.StdEncoding.EncodeToString([]byte(password)),
 	}
 	body, _ := json.Marshal(loginReq)
-	req, err := http.NewRequest("POST", serverURL+"/admin/login", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode, "login should return 200")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, "login should return 200")
 
 	var out struct {
 		Token string `json:"token"`
 	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&out))
 	require.NotEmpty(t, out.Token)
 	return out.Token
 }
 
-// Helper: set Validated=true for a user in the DB using TestApp.DB
 func setUserValidated(t *testing.T, username string) {
 	result := TestApp.DB.Model(&app.User{}).Where("username = ?", username).Update("validated", true)
 	require.NoError(t, result.Error)
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
-	serverURL := os.Getenv("API_URL")
-	if serverURL == "" {
-		serverURL = "http://localhost:8080"
-	}
+	superUser := "your_superuser" // or from env/config
+	superPass := "your_superpass"
+	require.NotNil(t, TestApp, "TestApp must be set by testapp_setup.go")
 
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
-	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
-	require.NotNil(t, TestApp, "TestApp must be set up by TestMain/init")
+	token := loginAndGetToken(t, superUser, superPass)
 
-	token := loginAndGetToken(t, serverURL, superUser, superPass)
-
-	// 1. Create a new user using /admin/user (requires y-access-token)
+	// 1. Create user
 	userUsername := "testuser1"
 	userPassword := "testpass1"
 	userReq := map[string]string{
@@ -64,49 +54,42 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 		"confirm_password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
 	}
 	body, _ := json.Marshal(userReq)
-	req, err := http.NewRequest("POST", serverURL+"/admin/user", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "user create should return 201")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, "user create should return 201")
 
-	// 2. Set Validated=true in the DB for the new user
+	// 2. Validate user directly in DB
 	setUserValidated(t, userUsername)
 
-	// 3. Login as the new user
+	// 3. Login as new user
 	loginReq := map[string]string{
 		"username": userUsername,
 		"password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
 	}
 	body, _ = json.Marshal(loginReq)
-	req2, err := http.NewRequest("POST", serverURL+"/admin/login", bytes.NewReader(body))
+	req2, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
 	require.NoError(t, err)
 	req2.Header.Set("Content-Type", "application/json")
-	resp2, err := http.DefaultClient.Do(req2)
-	require.NoError(t, err)
-	defer resp2.Body.Close()
-	require.Equal(t, http.StatusOK, resp2.StatusCode, "login as new user should return 200")
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusOK, w2.Code, "login as new user should return 200")
 }
 
 func TestLogin_Fail_WrongPassword(t *testing.T) {
-	serverURL := os.Getenv("API_URL")
-	if serverURL == "" {
-		serverURL = "http://localhost:8080"
-	}
 	// Assume user "testuser1" exists and is validated from previous test
 	loginReq := map[string]string{
 		"username": "testuser1",
 		"password": base64.StdEncoding.EncodeToString([]byte("wrongpass")),
 	}
 	body, _ := json.Marshal(loginReq)
-	req, err := http.NewRequest("POST", serverURL+"/admin/login", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "login with wrong password should return 401")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnauthorized, w.Code, "login with wrong password should return 401")
 }
