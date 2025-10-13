@@ -421,7 +421,7 @@ func (a *App) CreateUser(c *gin.Context) {
 
 	res := a.DB.Create(&u)
 	if res.Error != nil {
-		a.Log.Info().Msgf("Signup failed: [%s]", err.Error())
+		a.Log.Info().Msgf("Signup failed: [%s]", res.Error.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang [1]"})
 		return
 	}
