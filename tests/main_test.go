@@ -13,8 +13,6 @@ func TestMain(m *testing.M) {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	// Set up the initial TestApp so it's available globally
-	resetTestApp(nil)
 
 	// Run all tests
 	code := m.Run()
