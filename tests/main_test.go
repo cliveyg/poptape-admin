@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"os"
 	"testing"
 
@@ -18,11 +19,7 @@ func TestMain(m *testing.M) {
 		fmt.Println("Could not load .env file:", err)
 	}
 
-	// Print env to confirm
-	fmt.Println("POSTGRES_USERNAME:", os.Getenv("POSTGRES_USERNAME"))
-	fmt.Println("POSTGRES_DBNAME:", os.Getenv("POSTGRES_DBNAME"))
-	fmt.Println("POSTGRES_HOST:", os.Getenv("POSTGRES_HOST"))
-
+	gin.SetMode(gin.ReleaseMode)
 	TestApp = &app.App{}
 	TestApp.Log = setupLogger()
 	TestApp.CommandRunner = &app.RealCommandRunner{}

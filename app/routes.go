@@ -8,7 +8,7 @@ import (
 
 func (a *App) InitialiseRoutes() {
 
-	a.Log.Info().Msg("Initialising routes")
+	a.Log.Debug().Msg("Initialising routes")
 
 	//-----------------------------------------------------------------
 	// user routes
