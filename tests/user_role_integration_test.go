@@ -16,7 +16,7 @@ import (
 func loginAndGetToken(t *testing.T, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
-		"password": password),
+		"password": password,
 	}
 	body, _ := json.Marshal(loginReq)
 	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
