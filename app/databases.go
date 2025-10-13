@@ -246,7 +246,7 @@ func (a *App) CreateSuperUser() (*uuid.UUID, error) {
 		return nil, res.Error
 	}
 
-	if os.Getenv("ENVIRONMENT") == "DEV" {
+	if os.Getenv("ENVIRONMENT") == "DEV" || os.Getenv("ENVIRONMENT") == "TEST" {
 
 		if err = os.Setenv("CREATESUPER", "y"); err != nil {
 			a.Log.Info().Msgf("Unable to set CREATESUPER env var [%s]", err.Error())
