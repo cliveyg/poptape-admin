@@ -60,41 +60,57 @@ func resetTestDB(t *testing.T, appInstance *app.App, extraTables ...string) {
 	tables := []string{"saverecords", "creds", "role_cred_ms"}
 	tables = append(tables, extraTables...)
 	for _, table := range tables {
-		stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
-		err := appInstance.DB.Exec(stmt).Error
-		if err != nil {
-			failOrPanic(t, "Failed to truncate table %s: %v", table, err)
+		if appInstance.DB.Migrator().HasTable(table) {
+			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			err := appInstance.DB.Exec(stmt).Error
+			if err != nil {
+				failOrPanic(t, "Failed to truncate table %s: %v", table, err)
+			}
+		} else {
+			fmt.Printf("Table %s does not exist, skipping truncate\n", table)
 		}
 	}
 
 	// reset roles table to just the seeded roles
-	err := appInstance.DB.Exec("TRUNCATE TABLE roles RESTART IDENTITY CASCADE;").Error
-	if err != nil {
-		failOrPanic(t, "Failed to truncate roles: %v", err)
-	}
-	if err := appInstance.CreateRoles(); err != nil {
-		failOrPanic(t, "Failed to reseed roles: %v", err)
+	if appInstance.DB.Migrator().HasTable("roles") {
+		err := appInstance.DB.Exec("TRUNCATE TABLE roles RESTART IDENTITY CASCADE;").Error
+		if err != nil {
+			failOrPanic(t, "Failed to truncate roles: %v", err)
+		}
+		if err := appInstance.CreateRoles(); err != nil {
+			failOrPanic(t, "Failed to reseed roles: %v", err)
+		}
+	} else {
+		fmt.Println("Table roles does not exist, skipping truncate and reseed")
 	}
 
 	// reset microservices table to just the seeded microservices
-	err = appInstance.DB.Exec("TRUNCATE TABLE microservices RESTART IDENTITY CASCADE;").Error
-	if err != nil {
-		failOrPanic(t, "Failed to truncate microservices: %v", err)
-	}
-	// need a superuser to associate as creator
-	var superUserObj app.User
-	err = appInstance.DB.First(&superUserObj, "username = ?", superUser).Error
-	if err != nil {
-		failOrPanic(t, "Failed to find superuser for microservices seeding: %v", err)
-	}
-	if err := appInstance.CreateMicroservices(superUserObj.AdminId); err != nil {
-		failOrPanic(t, "Failed to reseed microservices: %v", err)
+	if appInstance.DB.Migrator().HasTable("microservices") {
+		err := appInstance.DB.Exec("TRUNCATE TABLE microservices RESTART IDENTITY CASCADE;").Error
+		if err != nil {
+			failOrPanic(t, "Failed to truncate microservices: %v", err)
+		}
+		// need a superuser to associate as creator
+		var superUserObj app.User
+		err = appInstance.DB.First(&superUserObj, "username = ?", superUser).Error
+		if err != nil {
+			failOrPanic(t, "Failed to find superuser for microservices seeding: %v", err)
+		}
+		if err := appInstance.CreateMicroservices(superUserObj.AdminId); err != nil {
+			failOrPanic(t, "Failed to reseed microservices: %v", err)
+		}
+	} else {
+		fmt.Println("Table microservices does not exist, skipping truncate and reseed")
 	}
 
 	// reset users: delete all except superuser
-	err = appInstance.DB.Exec("DELETE FROM users WHERE username <> ?", superUser).Error
-	if err != nil {
-		failOrPanic(t, "Failed to clear test users: %v", err)
+	if appInstance.DB.Migrator().HasTable("users") {
+		err := appInstance.DB.Exec("DELETE FROM users WHERE username <> ?", superUser).Error
+		if err != nil {
+			failOrPanic(t, "Failed to clear test users: %v", err)
+		}
+	} else {
+		fmt.Println("Table users does not exist, skipping delete")
 	}
 }
 
