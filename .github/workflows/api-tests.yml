@@ -50,7 +50,7 @@ jobs:
           - 27017:27017
         # set health checks to wait until mongo has started
         options: >-
-          --health-cmd "echo 'db.runCommand("ping").ok' | mongosh --quiet"
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -88,23 +88,25 @@ jobs:
         run: |
           find . -type d -exec cp .env {}/.env \;
 
-      # run unit tests
-      - name: Run go test and generate test coverage file
+      # run unit tests with accurate coverage
+      - name: Run go test and generate test coverage file (all packages)
+        working-directory: /
         run: |
           set -e
           set -o pipefail
-          touch poptape_admin.log
-          go test -v ./... -cover -coverprofile=./cover.out | tee test.out
-        shell: bash
+          touch /app/poptape_admin.log
+          cd /app
+          go test -v ./... -cover -coverprofile=cover.out | tee test.out
 
       # and check test coverage percentage
       - name: Check test coverage is above threshold
+        working-directory: /app
         env:
           TESTCOVERAGE_THRESHOLD: 0
         run: |
           echo "Checking test coverage is above threshold..."
           echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
-          totalCoverage=`go tool cover -func=cover.out | grep total | grep -Eo '[0-9]+\.[0-9]+'`
+          totalCoverage=$(go tool cover -func=cover.out | grep total | awk '{print $3}')
           echo "Current test coverage : $totalCoverage %"
           echo "-----------------------------------------------------------"
           if awk "BEGIN {exit !($totalCoverage >= $TESTCOVERAGE_THRESHOLD)}";
@@ -116,34 +118,32 @@ jobs:
               exit 1
           fi
           echo "-----------------------------------------------------------"
+
       - name: List missed coverage lines
-        shell: bash
+        working-directory: /app
         run: |
           echo "Missed lines:"
           awk '
             BEGIN { OFS=" " }
             /^mode:/ { next }
             {
-              for (i = 1; i <= NF; i += 4) {
-                block = $i
-                stmts = $(i+1)
-                count = $(i+2)
-                if (count == "0") {
-                  split(block, parts, ":")
-                  file = parts[1]
-                  rest = parts[2]
-                  split(rest, lines, ",")
-                  start = lines[1]
-                  end = lines[2]
-                  split(start, start_parts, ".")
-                  split(end, end_parts, ".")
-                  start_line = start_parts[1]
-                  end_line = end_parts[1]
-                  if (start_line == end_line) {
-                    print file ":" start_line
-                  } else {
-                    print file ":" start_line "-" end_line
-                  }
+              file=$1
+              sub(/:.*/, "", file)
+              lineinfo=$1
+              sub(/^[^:]*:/, "", lineinfo)
+              split(lineinfo, range, ",")
+              start=range[1]
+              end=range[2]
+              split($3, hit, "")
+              if ($3 == "0") {
+                split(start, start_parts, ".")
+                split(end, end_parts, ".")
+                start_line = start_parts[1]
+                end_line = end_parts[1]
+                if (start_line == end_line) {
+                  print file ":" start_line
+                } else {
+                  print file ":" start_line "-" end_line
                 }
               }
             }
