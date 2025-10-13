@@ -71,7 +71,7 @@ func resetDB(t *testing.T, a *app.App) {
 	}
 	a.Log.Debug().Msg("All tables cleared")
 
-	// Reseed: roles
+	// reseed: roles
 	if err := a.CreateRoles(); err != nil {
 		if t != nil {
 			t.Fatalf("Failed to reseed roles: %v", err)
@@ -80,7 +80,7 @@ func resetDB(t *testing.T, a *app.App) {
 		}
 	}
 
-	// Reseed: superuser
+	// reseed: superuser
 	adminId, err := a.CreateSuperUser()
 	if err != nil {
 		if t != nil {
@@ -90,13 +90,13 @@ func resetDB(t *testing.T, a *app.App) {
 		}
 	}
 
-	// Reseed: microservices
-	if err := a.CreateMicroservices(*adminId); err != nil {
+	// reseed: microservices
+	if err = a.CreateMicroservices(*adminId); err != nil {
 		if t != nil {
 			t.Fatalf("Failed to reseed microservices: %v", err)
 		} else {
 			panic(fmt.Sprintf("Failed to reseed microservices: %v", err))
 		}
 	}
-	a.Log.Info().Msg("Everything reseeded")
+	a.Log.Debug().Msg("Everything reseeded")
 }

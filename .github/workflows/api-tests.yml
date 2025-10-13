@@ -88,11 +88,6 @@ jobs:
         run: |
           find . -type d -exec cp .env {}/.env \;
 
-      - name: List files in /app before test
-        run: |
-          ls -al /app
-          cat /app/.env || echo ".env not found"    
-
       # run unit tests
       - name: Run go test and generate test coverage file
         run: |
