@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
-
-// Postgres helpers
 
 func TestPostgresDB(t *testing.T) *gorm.DB {
 	dsn := fmt.Sprintf(
@@ -28,15 +27,20 @@ func TestPostgresDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func CreateTestMicroservice(t *testing.T, db *gorm.DB, msName string) {
-	type Microservice struct {
-		MicroserviceId string `gorm:"primaryKey;type:uuid"`
-		MSName         string
-		Created        time.Time
+func GetAnyAdminId(t *testing.T, db *gorm.DB) uuid.UUID {
+	var user app.User
+	res := db.First(&user)
+	if res.Error != nil {
+		t.Fatalf("Could not retrieve user for admin id: %v", res.Error)
 	}
-	ms := Microservice{
-		MSName:  msName,
-		Created: time.Now(),
+	return user.AdminId
+}
+
+func CreateTestMicroservice(t *testing.T, db *gorm.DB, msName string) {
+	createdBy := GetAnyAdminId(t, db)
+	ms := app.Microservice{
+		MSName:    msName,
+		CreatedBy: createdBy,
 	}
 	res := db.Create(&ms)
 	if res.Error != nil {
@@ -45,11 +49,7 @@ func CreateTestMicroservice(t *testing.T, db *gorm.DB, msName string) {
 }
 
 func DropTestMicroservicesByPrefix(t *testing.T, db *gorm.DB, msPrefix string) {
-	type Microservice struct {
-		MicroserviceId string `gorm:"primaryKey;type:uuid"`
-		MSName         string
-	}
-	res := db.Where("ms_name LIKE ?", msPrefix+"%").Delete(&Microservice{})
+	res := db.Where("ms_name LIKE ?", msPrefix+"%").Delete(&app.Microservice{})
 	if res.Error != nil {
 		t.Errorf("Failed to clean up test microservices: %v", res.Error)
 	}
