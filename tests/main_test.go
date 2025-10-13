@@ -7,14 +7,10 @@ import (
 	"testing"
 )
 
-// TestMain is recognized by the Go test runner and is run once per package.
+// This is optional if you want to load env vars for your tests.
 func TestMain(m *testing.M) {
-	// Load .env file for test credentials/config
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
-
-	// Run all tests
-	code := m.Run()
-	os.Exit(code)
+	os.Exit(m.Run())
 }

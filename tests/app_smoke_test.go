@@ -10,14 +10,16 @@ import (
 )
 
 func TestApp_StartupSmokeTest(t *testing.T) {
-	require.NotNil(t, TestApp)
-	require.NotNil(t, TestApp.Router)
-	require.NotNil(t, TestApp.DB)
+	app := setupTestApp(t) // fresh, seeded app instance for every test
+
+	require.NotNil(t, app)
+	require.NotNil(t, app.Router)
+	require.NotNil(t, app.DB)
 
 	// admin/status route is live and returns expected fields/values
 	req := httptest.NewRequest("GET", "/admin/status", nil)
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	app.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var resp map[string]interface{}

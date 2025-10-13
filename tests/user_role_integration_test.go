@@ -41,9 +41,18 @@ func setUserValidated(t *testing.T, testApp *app.App, username string) {
 	require.NoError(t, result.Error)
 }
 
+// RandString returns a random alphanumeric string of n characters, for unique test users
+func RandString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[int64(len(letters))*int64(os.Getpid()+i)%int64(len(letters))]
+	}
+	return string(b)
+}
+
 func TestSuperuserLogin(t *testing.T) {
-	resetTestApp(t)
-	testApp := TestApp
+	testApp := setupTestApp(t)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS") // Already base64 encoded!
@@ -70,8 +79,7 @@ func TestSuperuserLogin(t *testing.T) {
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
-	resetTestApp(t)
-	testApp := TestApp
+	testApp := setupTestApp(t)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -115,8 +123,7 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 }
 
 func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
-	resetTestApp(t)
-	testApp := TestApp
+	testApp := setupTestApp(t)
 
 	superUser := os.Getenv("SUPERUSER")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
@@ -135,8 +142,7 @@ func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
 }
 
 func TestUserLogin_Fail_WrongPassword(t *testing.T) {
-	resetTestApp(t)
-	testApp := TestApp
+	testApp := setupTestApp(t)
 
 	// Setup: create and validate a user
 	superUser := os.Getenv("SUPERUSER")
@@ -175,14 +181,4 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	testApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusUnauthorized, w2.Code, "login with wrong password should return 401")
-}
-
-// RandString returns a random alphanumeric string of n characters, for unique test users
-func RandString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[int64(len(letters))*int64(os.Getpid()+i)%int64(len(letters))]
-	}
-	return string(b)
 }
