@@ -35,7 +35,6 @@ func setupLogger() *zerolog.Logger {
 	return &logger
 }
 
-// newTestApp creates and initializes a new App and database with all seed data.
 func newTestApp() *app.App {
 	a := &app.App{}
 	a.Log = setupLogger()
@@ -44,7 +43,6 @@ func newTestApp() *app.App {
 	return a
 }
 
-// resetTestApp resets the global TestApp and the DB to the seeded state plus resets test tables.
 func resetTestApp(t *testing.T) {
 	TestApp = newTestApp()
 	resetTestDB(t, TestApp)
@@ -58,53 +56,53 @@ func resetTestApp(t *testing.T) {
 func resetTestDB(t *testing.T, appInstance *app.App, extraTables ...string) {
 	superUser := os.Getenv("SUPERUSER")
 
-	// 1. Truncate test-data tables (add any others you want to always clear)
+	// truncate test-data tables (add any others you want to always clear)
 	tables := []string{"saverecords", "creds", "role_cred_ms"}
 	tables = append(tables, extraTables...)
 	for _, table := range tables {
 		stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
 		err := appInstance.DB.Exec(stmt).Error
 		if err != nil {
-			failOrPanic(t, fmt.Sprintf("Failed to truncate table %s: %v", table, err))
+			failOrPanic(t, "Failed to truncate table %s: %v", table, err)
 		}
 	}
 
-	// 2. Reset roles table to just the seeded roles
+	// reset roles table to just the seeded roles
 	err := appInstance.DB.Exec("TRUNCATE TABLE roles RESTART IDENTITY CASCADE;").Error
 	if err != nil {
-		failOrPanic(t, fmt.Sprintf("Failed to truncate roles: %v", err))
+		failOrPanic(t, "Failed to truncate roles: %v", err)
 	}
-	if err = appInstance.CreateRoles(); err != nil {
-		failOrPanic(t, fmt.Sprintf("Failed to reseed roles: %v", err))
+	if err := appInstance.CreateRoles(); err != nil {
+		failOrPanic(t, "Failed to reseed roles: %v", err)
 	}
 
-	// 3. Reset microservices table to just the seeded microservices
+	// reset microservices table to just the seeded microservices
 	err = appInstance.DB.Exec("TRUNCATE TABLE microservices RESTART IDENTITY CASCADE;").Error
 	if err != nil {
-		failOrPanic(t, fmt.Sprintf("Failed to truncate microservices: %v", err))
+		failOrPanic(t, "Failed to truncate microservices: %v", err)
 	}
-	// Need a superuser to associate as creator
+	// need a superuser to associate as creator
 	var superUserObj app.User
 	err = appInstance.DB.First(&superUserObj, "username = ?", superUser).Error
 	if err != nil {
-		failOrPanic(t, fmt.Sprintf("Failed to find superuser for microservices seeding: %v", err))
+		failOrPanic(t, "Failed to find superuser for microservices seeding: %v", err)
 	}
-	if err = appInstance.CreateMicroservices(superUserObj.AdminId); err != nil {
-		failOrPanic(t, fmt.Sprintf("Failed to reseed microservices: %v", err))
+	if err := appInstance.CreateMicroservices(superUserObj.AdminId); err != nil {
+		failOrPanic(t, "Failed to reseed microservices: %v", err)
 	}
 
-	// 4. Reset users: delete all except superuser
+	// reset users: delete all except superuser
 	err = appInstance.DB.Exec("DELETE FROM users WHERE username <> ?", superUser).Error
 	if err != nil {
-		failOrPanic(t, fmt.Sprintf("Failed to clear test users: %v", err))
+		failOrPanic(t, "Failed to clear test users: %v", err)
 	}
 }
 
 // failOrPanic: fails the test if t != nil, otherwise panics (for use in global setup)
-func failOrPanic(t *testing.T, msg string) {
+func failOrPanic(t *testing.T, format string, args ...interface{}) {
 	if t != nil {
-		t.Fatalf(msg)
+		t.Fatalf(format, args...)
 	} else {
-		panic(msg)
+		panic(fmt.Sprintf(format, args...))
 	}
 }
