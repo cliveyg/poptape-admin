@@ -19,6 +19,7 @@ func TestMain(m *testing.M) {
 		fmt.Println("Could not load .env file:", err)
 	}
 
+	gin.SetMode(gin.ReleaseMode)
 	TestApp = &app.App{}
 	TestApp.Log = setupLogger()
 	TestApp.CommandRunner = &app.RealCommandRunner{}
@@ -30,6 +31,5 @@ func TestMain(m *testing.M) {
 	resetDB(nil, TestApp)
 
 	code := m.Run()
-	gin.SetMode(gin.ReleaseMode)
 	os.Exit(code)
 }
