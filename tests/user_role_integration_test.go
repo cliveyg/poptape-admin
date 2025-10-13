@@ -16,7 +16,7 @@ import (
 func loginAndGetToken(t *testing.T, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
-		"password": base64.StdEncoding.EncodeToString([]byte(password)),
+		"password": password),
 	}
 	body, _ := json.Marshal(loginReq)
 	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
@@ -48,7 +48,7 @@ func TestSuperuserLogin(t *testing.T) {
 
 	loginReq := map[string]string{
 		"username": superUser,
-		"password": base64.StdEncoding.EncodeToString([]byte(superPass)),
+		"password": superPass,
 	}
 	body, _ := json.Marshal(loginReq)
 	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
