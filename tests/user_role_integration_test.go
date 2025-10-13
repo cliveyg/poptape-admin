@@ -2,105 +2,80 @@ package tests
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"github.com/cliveyg/poptape-admin/app"
-	"github.com/cliveyg/poptape-admin/utils"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
-// Helper: Strict UUID validation and parse
-func mustValidUUID(t *testing.T, s string) uuid.UUID {
-	require.True(t, utils.IsValidUUIDString(s), "invalid UUID string: %s", s)
-	id, err := uuid.Parse(s)
-	require.NoError(t, err)
-	return id
-}
-
-// Helper: Login as admin, return JWT token
-func loginAsAdmin(t *testing.T) string {
-	loginPayload := map[string]string{
-		"username": os.Getenv("SUPERUSER"),
-		"password": os.Getenv("SUPERPASS"),
+// Helper: login as superuser and return token
+func loginAndGetToken(t *testing.T, serverURL, superUser, superPass string) string {
+	loginReq := map[string]string{
+		"username": superUser,
+		"password": base64.StdEncoding.EncodeToString([]byte(superPass)),
 	}
-	body, _ := json.Marshal(loginPayload)
-	req := httptest.NewRequest("POST", "/admin/login", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]string
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	body, _ := json.Marshal(loginReq)
+	resp, err := http.Post(serverURL+"/admin/login", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
-	token := resp["token"]
-	require.NotEmpty(t, token)
-	return token
-}
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "login should return 200")
 
-// Helper: Create test user, return user AdminId
-func createTestUser(t *testing.T, adminToken, username string) uuid.UUID {
-	payload := map[string]string{
-		"username":         username,
-		"password":         "cGFzc3dvcmQ=", // "password" base64
-		"confirm_password": "cGFzc3dvcmQ=",
+	var out struct {
+		Token string `json:"token"`
 	}
-	body, _ := json.Marshal(payload)
-	req := httptest.NewRequest("POST", "/admin/user", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+adminToken)
-	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusCreated, w.Code)
-
-	// The response does not include AdminId, so fetch from DB
-	var user app.User
-	res := TestApp.DB.Where("username = ?", username).First(&user)
-	require.NoError(t, res.Error)
-	return user.AdminId
-}
-
-// Helper: Fetch user details from API
-func fetchUserDetails(t *testing.T, adminToken string, userId uuid.UUID) app.User {
-	req := httptest.NewRequest("GET", fmt.Sprintf("/admin/user/%s", userId), nil)
-	req.Header.Set("Authorization", "Bearer "+adminToken)
-	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	var resp struct {
-		User app.User `json:"user"`
-	}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	return resp.User
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+	require.NotEmpty(t, out.Token)
+	return out.Token
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
-	adminToken := loginAsAdmin(t)
-	username := fmt.Sprintf("testuser_%d", time.Now().UnixNano())
-	userId := createTestUser(t, adminToken, username)
-	user := fetchUserDetails(t, adminToken, userId)
-	require.Equal(t, username, user.Username)
+	serverURL := os.Getenv("API_URL") // or use testutils/server as appropriate
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+
+	token := loginAndGetToken(t, serverURL, superUser, superPass)
+
+	userReq := map[string]string{
+		"username":         "testuser1",
+		"password":         base64.StdEncoding.EncodeToString([]byte("testpass1")),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte("testpass1")),
+	}
+	body, _ := json.Marshal(userReq)
+	req, _ := http.NewRequest("POST", serverURL+"/admin/user", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "user create should return 201")
+
+	// Optionally parse response for created user info
+
+	// 2. Login as new user
+	loginReq := map[string]string{
+		"username": "testuser1",
+		"password": base64.StdEncoding.EncodeToString([]byte("testpass1")),
+	}
+	body, _ = json.Marshal(loginReq)
+	resp2, err := http.Post(serverURL+"/admin/login", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	defer resp2.Body.Close()
+	require.Equal(t, http.StatusOK, resp2.StatusCode, "login as new user should return 200")
 }
 
 func TestLogin_Fail_WrongPassword(t *testing.T) {
-	loginPayload := map[string]string{
-		"username": os.Getenv("SUPERUSER"),
-		"password": "wrongpassword",
+	serverURL := os.Getenv("API_URL")
+	// Assume user "testuser1" exists from previous test
+	loginReq := map[string]string{
+		"username": "testuser1",
+		"password": base64.StdEncoding.EncodeToString([]byte("wrongpass")),
 	}
-	body, _ := json.Marshal(loginPayload)
-	req := httptest.NewRequest("POST", "/admin/login", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	body, _ := json.Marshal(loginReq)
+	resp, err := http.Post(serverURL+"/admin/login", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
-	require.Equal(t, "Bad request", resp["message"])
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "login with wrong password should return 401")
 }
