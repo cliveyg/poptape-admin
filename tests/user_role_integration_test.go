@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -15,12 +16,12 @@ import (
 )
 
 // Helper: Strict UUID validation and parse
-//func mustValidUUID(t *testing.T, s string) uuid.UUID {
-//	require.True(t, utils.IsValidUUIDString(s), "invalid UUID string: %s", s)
-//	id, err := uuid.Parse(s)
-//	require.NoError(t, err)
-//	return id
-//}
+func mustValidUUID(t *testing.T, s string) uuid.UUID {
+	require.True(t, utils.IsValidUUIDString(s), "invalid UUID string: %s", s)
+	id, err := uuid.Parse(s)
+	require.NoError(t, err)
+	return id
+}
 
 // Helper: Login as admin, return JWT token
 func loginAsAdmin(t *testing.T) string {
