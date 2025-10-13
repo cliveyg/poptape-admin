@@ -417,7 +417,7 @@ func (a *App) CreateUser(c *gin.Context) {
 	u := User{Username: su.Username, Password: epw}
 	u.Roles = append(u.Roles, Role{Name: "admin"})
 
-	a.Log.Info().Interface("User: ", u).Send()
+	a.Log.Debug().Interface("User: ", u).Send()
 
 	res := a.DB.Create(&u)
 	if res.Error != nil {
@@ -426,7 +426,7 @@ func (a *App) CreateUser(c *gin.Context) {
 		return
 	}
 
-	// validate user if in DEV env
+	// auto validate user if in DEV or TEST env
 	ms := fmt.Sprintf("User [%s] created but not validated; Id is [%s]", u.Username, u.AdminId.String())
 	if os.Getenv("ENVIRONMENT") == "DEV" || os.Getenv("ENVIRONMENT") == "TEST" {
 		u.Validated = true
