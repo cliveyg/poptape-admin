@@ -1,17 +1,21 @@
-package main
+package tests
 
 import (
+	"context"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"log"
 	"os"
 	"strings"
+	"testing"
 	"time"
 )
 
 func setupLogger() *zerolog.Logger {
+	// Try to get log file from env, else default to stdout
 	var logWriter = os.Stdout
 	if logFileName := os.Getenv("LOGFILE"); logFileName != "" {
 		logFile, err := os.OpenFile(logFileName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
@@ -50,10 +54,12 @@ func setupLogger() *zerolog.Logger {
 	default:
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 	}
+
 	return &logger
 }
 
-func main() {
+func TestMain(m *testing.M) {
+	// Load .env like in production
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -63,5 +69,24 @@ func main() {
 	a.CommandRunner = &app.RealCommandRunner{}
 
 	a.InitialiseApp()
-	a.Run(":" + os.Getenv("PORT"))
+	code := m.Run()
+	os.Exit(code)
+}
+
+func TestHarnessSmokeTest(t *testing.T) {
+	msName := testutils.TestMicroserviceName(1) // "test_microservice1"
+
+	// MongoDB: Create dummy collection in test db, then drop it
+	client := testutils.TestMongoClient(t)
+	defer func() { _ = client.Disconnect(context.Background()) }()
+	db := client.Database(msName)
+	if err := db.CreateCollection(context.Background(), "fs.files"); err != nil {
+		t.Fatalf("Failed to create dummy collection: %v", err)
+	}
+	testutils.DropTestMongoDatabases(t, client, "test_microservice")
+
+	// Postgres: Create and drop test microservice
+	dbpg := testutils.TestPostgresDB(t)
+	testutils.CreateTestMicroservice(t, dbpg, msName)
+	testutils.DropTestMicroservicesByPrefix(t, dbpg, "test_microservice")
 }

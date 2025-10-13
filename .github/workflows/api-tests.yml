@@ -13,6 +13,9 @@ jobs:
   unit-tests:
     name: Run api tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: /app
     container:
       image: ubuntu:latest
       volumes:
@@ -80,6 +83,16 @@ jobs:
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Copy .env into all package directories
+        run: |
+          find . -type d -exec cp .env {}/.env \;
+
+      - name: List files in /app before test
+        run: |
+          ls -al /app
+          cat /app/.env || echo ".env not found"    
+
       # run unit tests
       - name: Run go test and generate test coverage file
         run: |
