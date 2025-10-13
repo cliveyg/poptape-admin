@@ -119,7 +119,6 @@ jobs:
       - name: List missed coverage lines
         shell: bash
         run: |
-          go test -coverprofile=coverage.out ./...
           echo "Missed lines:"
           awk '
             BEGIN { OFS=" " }
@@ -148,7 +147,7 @@ jobs:
                 }
               }
             }
-          ' coverage.out
+          ' cover.out
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
