@@ -66,9 +66,11 @@ func TestSuperuserLogin(t *testing.T) {
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
-	superUser := "your_superuser" // or from env/config
-	superPass := "your_superpass"
-	require.NotNil(t, TestApp, "TestApp must be set by testapp_setup.go")
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
+	require.NotNil(t, TestApp, "TestApp must be set up by TestMain/init")
 
 	token := loginAndGetToken(t, superUser, superPass)
 
