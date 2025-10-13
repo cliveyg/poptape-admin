@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Helper: login as given user and return token string
+// Helper: login as the given user and return JWT token string
 func loginAndGetToken(t *testing.T, serverURL, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
@@ -55,7 +55,7 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 
 	token := loginAndGetToken(t, serverURL, superUser, superPass)
 
-	// 1. Create a new user
+	// 1. Create a new user using /admin/user (requires y-access-token)
 	userUsername := "testuser1"
 	userPassword := "testpass1"
 	userReq := map[string]string{
