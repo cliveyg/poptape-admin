@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func loginAndGetToken(t *testing.T, username, password string) string {
+// Helper: login as the given user and return JWT token string
+func loginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
 		"password": password,
@@ -23,7 +24,7 @@ func loginAndGetToken(t *testing.T, username, password string) string {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	testApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code, "login should return 200")
 
 	var out struct {
@@ -34,18 +35,20 @@ func loginAndGetToken(t *testing.T, username, password string) string {
 	return out.Token
 }
 
-func setUserValidated(t *testing.T, username string) {
-	result := TestApp.DB.Model(&app.User{}).Where("username = ?", username).Update("validated", true)
+// Helper: set Validated=true for a user in the DB using testApp.DB
+func setUserValidated(t *testing.T, testApp *app.App, username string) {
+	result := testApp.DB.Model(&app.User{}).Where("username = ?", username).Update("validated", true)
 	require.NoError(t, result.Error)
 }
 
-// Explicit test for superuser login with base64 password (from .env)
 func TestSuperuserLogin(t *testing.T) {
+	resetTestApp(t)
+	testApp := TestApp
+
 	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS") // Already base64 encoded
+	superPass := os.Getenv("SUPERPASS") // Already base64 encoded!
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
 	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
-	require.NotNil(t, TestApp, "TestApp must be set up by TestMain/init")
 
 	loginReq := map[string]string{
 		"username": superUser,
@@ -56,7 +59,7 @@ func TestSuperuserLogin(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	testApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code, "superuser login should return 200")
 
 	var out struct {
@@ -66,19 +69,20 @@ func TestSuperuserLogin(t *testing.T) {
 	require.NotEmpty(t, out.Token)
 }
 
-// Independent CRUD/user happy path test
 func TestUserCRUD_HappyPath(t *testing.T) {
+	resetTestApp(t)
+	testApp := TestApp
+
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
 	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
-	require.NotNil(t, TestApp, "TestApp must be set up by TestMain/init")
 
-	token := loginAndGetToken(t, superUser, superPass)
+	token := loginAndGetToken(t, testApp, superUser, superPass)
 
-	// Use unique username for this test run
-	userUsername := "testuser1_happy"
-	userPassword := "testpass1_happy"
+	// 1. Create a new user
+	userUsername := "testuser1_" + RandString(8)
+	userPassword := "testpass1"
 	userReq := map[string]string{
 		"username":         userUsername,
 		"password":         base64.StdEncoding.EncodeToString([]byte(userPassword)),
@@ -90,13 +94,13 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	testApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, "user create should return 201")
 
-	// Validate user directly in DB
-	setUserValidated(t, userUsername)
+	// 2. Validate user in DB
+	setUserValidated(t, testApp, userUsername)
 
-	// Login as new user
+	// 3. Login as new user
 	loginReq := map[string]string{
 		"username": userUsername,
 		"password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
@@ -106,15 +110,16 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w2, req2)
+	testApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusOK, w2.Code, "login as new user should return 200")
 }
 
-// Test login fails with incorrect password (independent, uses only superuser)
 func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
+	resetTestApp(t)
+	testApp := TestApp
+
 	superUser := os.Getenv("SUPERUSER")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
-	require.NotNil(t, TestApp, "TestApp must be set up by TestMain/init")
 
 	loginReq := map[string]string{
 		"username": superUser,
@@ -125,20 +130,22 @@ func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	testApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusUnauthorized, w.Code, "login with wrong password should return 401")
 }
 
-// Test login fails with incorrect password (independent, can be used for any user)
 func TestUserLogin_Fail_WrongPassword(t *testing.T) {
+	resetTestApp(t)
+	testApp := TestApp
+
 	// Setup: create and validate a user
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
 	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
-	token := loginAndGetToken(t, superUser, superPass)
+	token := loginAndGetToken(t, testApp, superUser, superPass)
 
-	userUsername := "testuser1_fail"
+	userUsername := "testuser1_fail_" + RandString(8)
 	userPassword := "testpass1_fail"
 	userReq := map[string]string{
 		"username":         userUsername,
@@ -151,10 +158,10 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	testApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, "user create should return 201")
 
-	setUserValidated(t, userUsername)
+	setUserValidated(t, testApp, userUsername)
 
 	// Now: try logging in with wrong password
 	loginReq := map[string]string{
@@ -166,6 +173,16 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 	require.NoError(t, err)
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w2, req2)
+	testApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusUnauthorized, w2.Code, "login with wrong password should return 401")
+}
+
+// RandString returns a random alphanumeric string of n characters, for unique test users
+func RandString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[int64(len(letters))*int64(os.Getpid()+i)%int64(len(letters))]
+	}
+	return string(b)
 }
