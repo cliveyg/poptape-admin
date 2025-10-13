@@ -94,7 +94,7 @@ jobs:
           set -e
           set -o pipefail
           touch poptape_admin.log
-          go test -v ./... -cover -coverprofile=cover.out | tee test.out
+          go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
         shell: bash
 
       # and check test coverage percentage
