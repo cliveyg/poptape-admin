@@ -94,7 +94,9 @@ func Decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
 
 //-----------------------------------------------------------------------------
 
-func GenerateToken(username string, adminId uuid.UUID) (string, error) {
+var GenerateToken = generateToken
+
+func generateToken(username string, adminId uuid.UUID) (string, error) {
 
 	tokenLifespan, err := strconv.Atoi(os.Getenv("TOKEN_LIFESPAN"))
 	if err != nil {
