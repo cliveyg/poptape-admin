@@ -147,5 +147,3 @@ jobs:
         with:
           gist-id: c9188881d498a3e609cfcf4875845d9f
           token: ${{ secrets.GIST_TOKEN }}
-          coverage-file: coverage.lcov
-          coverage-format: lcov
