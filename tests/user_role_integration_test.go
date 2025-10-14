@@ -864,8 +864,8 @@ func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
 
-	// Use a role that is not in the seeded list
-	roleName := "notarole_" + RandString(12)
+	// Use a role that is not in the seeded list and is <= 20 chars
+	roleName := "notarole" + RandString(5)
 	// Confirm it doesn't exist in the DB
 	var role app.Role
 	err := TestApp.DB.Where("name = ?", roleName).First(&role).Error
