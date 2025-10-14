@@ -864,12 +864,18 @@ func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
 
-	// Try to remove a truly non-existent role
-	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/definitelynotarole", nil)
+	// Use a role that is not in the seeded list
+	roleName := "notarole_" + RandString(12)
+	// Confirm it doesn't exist in the DB
+	var role app.Role
+	err := TestApp.DB.Where("name = ?", roleName).First(&role).Error
+	require.Error(t, err, "Role should not exist in DB")
+
+	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/"+roleName, nil)
 	req2.Header.Set("y-access-token", superToken)
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
-	require.Equal(t, http.StatusNotFound, w2.Code)
+	require.Equal(t, http.StatusNotFound, w2.Code, "Should return 404 if role does not exist")
 	require.Contains(t, w2.Body.String(), "Role does not exist")
 }
 
