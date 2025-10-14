@@ -124,16 +124,18 @@ jobs:
       - name: Show coverage summary
         run: go tool cover -func=cover.out
 
+      # Debug coverage line parsing section to help debug the issue
       - name: Debug coverage line parsing
         shell: bash
         run: |
           echo "AWK field test:"
           grep -v "^mode:" cover.out | awk '{ print "FIELD1="$1, "FIELD2="$2, "FIELD3="$3, "LAST="$NF, "ALL="$0 }'
 
+      # Correct missing lines reporting: List missed coverage lines using raw cover.out
       - name: List missed coverage lines
         shell: bash
         run: |
-          echo "Missed lines:"
+          echo "Missed lines (uncovered code ranges):"
           grep -v "^mode:" cover.out | awk '$3 == 0 {
             split($1, a, ":");
             split(a[2], b, ",");
