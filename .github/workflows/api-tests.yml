@@ -100,20 +100,19 @@ jobs:
       # and check test coverage percentage
       - name: Check test coverage is above threshold
         env:
-          TESTCOVERAGE_THRESHOLD: 0
+          TESTCOVERAGE_THRESHOLD: 80
         run: |
           echo "Checking test coverage is above threshold..."
           echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
-          totalCoverage=$(go tool cover -func=cover.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
+          totalCoverage=$(go tool cover -func=cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
           echo "Current test coverage : $totalCoverage %"
           echo "-----------------------------------------------------------"
-          if awk "BEGIN {exit !($totalCoverage >= $TESTCOVERAGE_THRESHOLD)}";
-          then
-              echo "Coverage passed threshold OK"
+          if [ "$(echo "$totalCoverage >= $TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "Coverage passed threshold OK"
           else
-              echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
-              echo "Failed"
-              exit 1
+            echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
+            echo "Failed"
+            exit 1
           fi
           echo "-----------------------------------------------------------"
         shell: bash
@@ -125,34 +124,13 @@ jobs:
         shell: bash
         run: |
           echo "Missed lines:"
-          awk '
-            BEGIN { OFS=" " }
-            /^mode:/ { next }
-            {
-              for (i = 1; i <= NF; i += 4) {
-                block = $i
-                stmts = $(i+1)
-                count = $(i+2)
-                if (count == "0") {
-                  split(block, parts, ":")
-                  file = parts[1]
-                  rest = parts[2]
-                  split(rest, lines, ",")
-                  start = lines[1]
-                  end = lines[2]
-                  split(start, start_parts, ".")
-                  split(end, end_parts, ".")
-                  start_line = start_parts[1]
-                  end_line = end_parts[1]
-                  if (start_line == end_line) {
-                    print file ":" start_line
-                  } else {
-                    print file ":" start_line "-" end_line
-                  }
-                }
-              }
-            }
-          ' cover.out
+          # List all uncovered blocks/line ranges from cover.out
+          grep -v "^mode:" cover.out | awk -F: '$3 == 0 {
+            split($2, a, ",");
+            split(a[1], b, ".");
+            split(a[2], c, ".");
+            print $1 ":" b[1] "-" c[1];
+          }'
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
