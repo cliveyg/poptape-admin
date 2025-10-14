@@ -1,7 +1,12 @@
 package tests
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/require"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -42,6 +47,41 @@ func setupTestApp(t *testing.T) *app.App {
 	a.CommandRunner = &app.RealCommandRunner{}
 	a.InitialiseApp() // runs migrations and seeds roles, superuser, microservices, etc.
 	return a
+}
+
+func loginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
+	loginReq := map[string]string{
+		"username": username,
+		"password": password,
+	}
+	body, _ := json.Marshal(loginReq)
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, "login should return 200")
+
+	var out struct {
+		Token string `json:"token"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&out))
+	require.NotEmpty(t, out.Token)
+	return out.Token
+}
+
+func setUserValidated(t *testing.T, testApp *app.App, username string) {
+	result := testApp.DB.Model(&app.User{}).Where("username = ?", username).Update("validated", true)
+	require.NoError(t, result.Error)
+}
+
+func RandString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[int64(len(letters))*int64(os.Getpid()+i)%int64(len(letters))]
+	}
+	return string(b)
 }
 
 func resetDB(t *testing.T, a *app.App) {
