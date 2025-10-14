@@ -315,9 +315,6 @@ func TestCreateUser_Fail_DBCreateError_DuplicateUsername(t *testing.T) {
 	require.Contains(t, w2.Body.String(), "Something went bang [1]")
 }
 
-// Note: For "DB validate error" branch (the Save after creation), this is difficult to simulate in a black-box integration test
-// without complex DB-level manipulation or custom build hooks. If needed, document this coverage limitation.
-
 func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -344,11 +341,11 @@ func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
 
 func TestLogin_GenerateTokenError(t *testing.T) {
 	resetDB(t, TestApp)
-	// Save original function
+	// save original function
 	orig := utils.GenerateToken
 	defer func() { utils.GenerateToken = orig }()
 
-	// Mock GenerateToken
+	// mock GenerateToken
 	utils.GenerateToken = func(username string, adminId uuid.UUID) (string, error) {
 		return "", errors.New("JWT error")
 	}
@@ -375,4 +372,234 @@ func TestLogin_GenerateTokenError(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, resp, "message")
 	require.Equal(t, "Something went bang", resp["message"])
+}
+
+// --- Tests for DeleteUser and FetchUser routes ---
+
+func TestDeleteUser_HappyPath(t *testing.T) {
+	resetDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	// 1. Create user
+	userUsername := "deluser_" + RandString(8)
+	userPassword := "delpass1"
+	userReq := map[string]string{
+		"username":         userUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(userPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	setUserValidated(t, TestApp, userUsername)
+
+	var user app.User
+	err = TestApp.DB.Where("username = ?", userUsername).First(&user).Error
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, user.AdminId)
+
+	delReq, err := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String(), nil)
+	require.NoError(t, err)
+	delReq.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, delReq)
+	require.Equal(t, http.StatusGone, w2.Code)
+	require.Contains(t, w2.Body.String(), "User deleted")
+
+	// Confirm user is deleted (fetch should 404)
+	fetchReq, err := http.NewRequest("GET", "/admin/user/"+user.AdminId.String(), nil)
+	require.NoError(t, err)
+	fetchReq.Header.Set("y-access-token", token)
+	w3 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w3, fetchReq)
+	require.Equal(t, http.StatusNotFound, w3.Code)
+}
+
+func TestDeleteUser_BadUUID(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	req, err := http.NewRequest("DELETE", "/admin/user/not-a-uuid", nil)
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request")
+}
+
+func TestDeleteUser_NonExistentUser(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	randomUUID := uuid.New().String()
+	req, err := http.NewRequest("DELETE", "/admin/user/"+randomUUID, nil)
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusGone, w.Code)
+	require.Contains(t, w.Body.String(), "User deleted")
+}
+
+func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
+	resetDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	// 1. Create a normal user with admin role
+	adminUsername := "adminuser_" + RandString(8)
+	adminPassword := "adminpass"
+	adminReq := map[string]string{
+		"username":         adminUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+	}
+	body, _ := json.Marshal(adminReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", superToken)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	setUserValidated(t, TestApp, adminUsername)
+
+	// 2. Login as admin user
+	adminToken := loginAndGetToken(t, TestApp, adminUsername, adminPassword)
+
+	// 3. Create another normal user to be deleted
+	otherUsername := "victimuser_" + RandString(8)
+	otherPassword := "victimpass"
+	otherReq := map[string]string{
+		"username":         otherUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(otherPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(otherPassword)),
+	}
+	body, _ = json.Marshal(otherReq)
+	req2, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req2.Header.Set("y-access-token", superToken)
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusCreated, w2.Code)
+
+	setUserValidated(t, TestApp, otherUsername)
+
+	var victimUser app.User
+	err = TestApp.DB.Where("username = ?", otherUsername).First(&victimUser).Error
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, victimUser.AdminId)
+
+	// 4. Try to delete victim as admin (should fail - forbidden)
+	delReq, err := http.NewRequest("DELETE", "/admin/user/"+victimUser.AdminId.String(), nil)
+	require.NoError(t, err)
+	delReq.Header.Set("y-access-token", adminToken)
+	w3 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w3, delReq)
+	require.Equal(t, http.StatusForbidden, w3.Code)
+	require.Contains(t, w3.Body.String(), "Forbidden")
+}
+
+func TestFetchUser_HappyPath(t *testing.T) {
+	resetDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	userUsername := "fetchuser_" + RandString(8)
+	userPassword := "fetchpass1"
+	userReq := map[string]string{
+		"username":         userUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(userPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	setUserValidated(t, TestApp, userUsername)
+
+	var user app.User
+	err = TestApp.DB.Where("username = ?", userUsername).First(&user).Error
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, user.AdminId)
+
+	fetchReq, err := http.NewRequest("GET", "/admin/user/"+user.AdminId.String(), nil)
+	require.NoError(t, err)
+	fetchReq.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, fetchReq)
+	require.Equal(t, http.StatusOK, w2.Code)
+	require.Contains(t, w2.Body.String(), userUsername)
+}
+
+func TestFetchUser_BadUUID(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	req, err := http.NewRequest("GET", "/admin/user/not-a-uuid", nil)
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request")
+}
+
+func TestFetchUser_NonExistentUser(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	randomUUID := uuid.New().String()
+	req, err := http.NewRequest("GET", "/admin/user/"+randomUUID, nil)
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "User not found")
 }

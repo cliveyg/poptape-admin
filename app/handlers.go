@@ -482,22 +482,12 @@ func (a *App) Login(c *gin.Context) {
 	//a.Log.Debug().Interface("User", u).Send()
 	c.Set("user", u)
 	res := a.DB.Set("login", true).Set("user", u).Save(&u)
-
 	if res.Error != nil {
 		a.Log.Info().Msgf("Unable to update user last login: [%s]", res.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Ooops"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"token": token})
-}
-
-//-----------------------------------------------------------------------------
-// Testy
-//-----------------------------------------------------------------------------
-
-func (a *App) Testy(c *gin.Context) {
-	a.Log.Debug().Msg("In Testy")
-	c.JSON(http.StatusTeapot, gin.H{"message": "Cup of tea?"})
 }
 
 //-----------------------------------------------------------------------------
