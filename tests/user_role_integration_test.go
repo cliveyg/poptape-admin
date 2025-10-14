@@ -699,8 +699,8 @@ func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
 
-	// Try to add a bogus role
-	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/notarole", nil)
+	// Try to add a truly non-existent role
+	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/definitelynotarole", nil)
 	req2.Header.Set("y-access-token", superToken)
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
@@ -737,6 +737,7 @@ func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusNotModified, w2.Code)
+	// Do not check body, as 304 may have empty body
 }
 
 func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
@@ -863,8 +864,8 @@ func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
 
-	// Try to remove a bogus role
-	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/notarole", nil)
+	// Try to remove a truly non-existent role
+	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/definitelynotarole", nil)
 	req2.Header.Set("y-access-token", superToken)
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
@@ -901,7 +902,7 @@ func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusNotModified, w2.Code)
-	require.Contains(t, w2.Body.String(), "Incorrect input")
+	// Do not check body, as 304 may be empty
 }
 
 func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
