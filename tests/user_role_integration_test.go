@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"github.com/cliveyg/poptape-admin/utils"
+	"github.com/google/uuid"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -119,6 +122,31 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusOK, w2.Code, "login as new user should return 200")
+}
+
+func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
+	resetDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+
+	loginReq := map[string]string{
+		"username": superUser,
+	}
+	body, _ := json.Marshal(loginReq)
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code, "login with missing password field return 400")
+
+	var resp map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Contains(t, resp, "message")
+	require.Equal(t, "Bad request", resp["message"])
+
 }
 
 func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
@@ -312,4 +340,39 @@ func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 	require.NotEmpty(t, w.Header().Get("y-access-token"))
+}
+
+func TestLogin_GenerateTokenError(t *testing.T) {
+	resetDB(t, TestApp)
+	// Save original function
+	orig := utils.GenerateToken
+	defer func() { utils.GenerateToken = orig }()
+
+	// Mock GenerateToken
+	utils.GenerateToken = func(username string, adminId uuid.UUID) (string, error) {
+		return "", errors.New("JWT error")
+	}
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS") // Already base64 encoded!
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
+
+	loginReq := map[string]string{
+		"username": superUser,
+		"password": superPass,
+	}
+	body, _ := json.Marshal(loginReq)
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code, "login ok but generate jwt fails; return 500")
+
+	var resp map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Contains(t, resp, "message")
+	require.Equal(t, "Something went bang", resp["message"])
 }
