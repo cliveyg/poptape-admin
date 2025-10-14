@@ -122,37 +122,11 @@ jobs:
       - name: Show coverage summary
         run: go tool cover -func=cover.out
 
-      # Debug coverage line parsing section to help debug the issue
-      - name: Debug coverage line parsing
-        shell: bash
+      # List missed coverage lines using a Go script for accuracy.
+      # Place list_missed_lines.go in the tools/ directory.
+      - name: List missed coverage lines (Go script, robust)
         run: |
-          echo "AWK field test:"
-          grep -v "^mode:" cover.out | awk '{ print "FIELD1="$1, "FIELD2="$2, "FIELD3="$3, "LAST="$NF, "ALL="$0 }'
-
-      # List missed coverage lines with robust parsing to avoid false positives
-      - name: List missed coverage lines
-        shell: bash
-        run: |
-          echo "Missed lines (uncovered code ranges):"
-          grep -v "^mode:" cover.out | awk '
-            NF < 3 { next }
-            $3 == 0 {
-              split($1, a, ":");
-              if (length(a) < 2) next;
-              file = a[1];
-              range = a[2];
-              split(range, b, ",");
-              if (length(b) < 2) next;
-              split(b[1], start, ".");
-              split(b[2], end, ".");
-              startLine = start[1];
-              endLine = end[1];
-              # Only print when there is a real span (avoid zero-length segments)
-              if (file != "" && startLine != "" && endLine != "" && startLine != endLine) {
-                printf "%s:%s-%s\n", file, startLine, endLine;
-              }
-            }
-          '
+          go run ./tools/list_missed_lines.go cover.out
 
       # Generate HTML coverage report
       - name: Generate HTML coverage report

@@ -26,3 +26,4 @@
 !.github/workflows/api-tests.yml
 !testutils/*
 !tests/*
+!tools/list_missed_lines.go
