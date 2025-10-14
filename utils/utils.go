@@ -94,6 +94,7 @@ func Decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
 
 //-----------------------------------------------------------------------------
 
+// enables easier testing
 var GenerateToken = generateToken
 
 func generateToken(username string, adminId uuid.UUID) (string, error) {
