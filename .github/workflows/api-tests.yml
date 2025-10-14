@@ -116,9 +116,10 @@ jobs:
               exit 1
           fi
           echo "-----------------------------------------------------------"
-          echo cover.out
-          echo "-----------------------------------------------------------"
         shell: bash
+
+      - name: Show coverage summary
+        run: go tool cover -func=cover.out
 
       - name: List missed coverage lines
         shell: bash
