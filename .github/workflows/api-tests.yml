@@ -129,12 +129,16 @@ jobs:
         run: |
           echo "Missed lines:"
           # List all uncovered blocks/line ranges from cover.out
-          grep -v "^mode:" cover.out | awk -F: '$3 == 0 {
-            split($2, a, ",");
-            split(a[1], b, ".");
-            split(a[2], c, ".");
-            print $1 ":" b[1] "-" c[1];
-          }'
+          grep -v "^mode:" cover.out | awk '
+            {
+              split($2, lines, ",");
+              split(lines[1], start, ".");
+              split(lines[2], end, ".");
+              count = $4;
+              if (count == "0") {
+                print $1 ":" start[1] "-" end[1];
+              }
+            }'
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
