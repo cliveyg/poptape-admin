@@ -71,8 +71,6 @@ jobs:
 
       - name: Install Go dependencies
         run: |
-          rm -f go.mod go.sum
-          go mod init github.com/cliveyg/poptape-admin
           go mod tidy
 
       # run go build and output binary to dev null as it's not used for running unit tests
@@ -131,18 +129,42 @@ jobs:
           echo "AWK field test:"
           grep -v "^mode:" cover.out | awk '{ print "FIELD1="$1, "FIELD2="$2, "FIELD3="$3, "LAST="$NF, "ALL="$0 }'
 
-      # Correct missing lines reporting: List missed coverage lines using raw cover.out
+      # List missed coverage lines with robust parsing to avoid false positives
       - name: List missed coverage lines
         shell: bash
         run: |
           echo "Missed lines (uncovered code ranges):"
-          grep -v "^mode:" cover.out | awk '$3 == 0 {
-            split($1, a, ":");
-            split(a[2], b, ",");
-            split(b[1], c, ".");
-            split(b[2], d, ".");
-            printf "%s:%s-%s\n", a[1], c[1], d[1];
-          }'
+          grep -v "^mode:" cover.out | awk '
+            NF < 3 { next }
+            $3 == 0 {
+              split($1, a, ":");
+              if (length(a) < 2) next;
+              file = a[1];
+              range = a[2];
+              split(range, b, ",");
+              if (length(b) < 2) next;
+              split(b[1], start, ".");
+              split(b[2], end, ".");
+              startLine = start[1];
+              endLine = end[1];
+              # Only print when there is a real span (avoid zero-length segments)
+              if (file != "" && startLine != "" && endLine != "" && startLine != endLine) {
+                printf "%s:%s-%s\n", file, startLine, endLine;
+              }
+            }
+          '
+
+      # Generate HTML coverage report
+      - name: Generate HTML coverage report
+        run: |
+          go tool cover -html=cover.out -o coverage.html
+
+      # Upload HTML coverage report as an artifact so you can download it after the workflow run
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
