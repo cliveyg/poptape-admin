@@ -254,3 +254,65 @@ func TestCreateCreds_Fail_InvalidBase64Password(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	require.Contains(t, w.Body.String(), "Bad request [4]")
 }
+
+func TestCreateCreds_Fail_MicroserviceBind(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	uniq := RandString(8)
+	// Omit "ms_name" to trigger MsIn bind failure (Bad request [2])
+	payload := map[string]interface{}{
+		"db_name":     "db_" + uniq,
+		"type":        "mongo",
+		"url":         "/" + uniq,
+		"db_username": "user_" + uniq,
+		"db_password": randomB64Password(),
+		"db_port":     "27017",
+		"host":        "host-" + uniq,
+		"role_name":   "role_" + uniq, // present, so will get to MsIn
+		// "ms_name":     "ms_" + uniq, // <--- intentionally omitted
+	}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request [2]")
+}
+
+func TestCreateCreds_Fail_RoleBind(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	uniq := RandString(8)
+	// Omit "role_name" to trigger Role bind failure (Bad request [3])
+	payload := map[string]interface{}{
+		"db_name":     "db_" + uniq,
+		"type":        "mongo",
+		"url":         "/" + uniq,
+		"db_username": "user_" + uniq,
+		"db_password": randomB64Password(),
+		"db_port":     "27017",
+		"host":        "host-" + uniq,
+		"ms_name":     "ms_" + uniq, // present so MsIn binds fine
+		// "role_name":   "role_" + uniq, // <--- intentionally omitted
+	}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request [3]")
+}

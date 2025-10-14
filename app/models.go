@@ -140,7 +140,7 @@ type Signup struct {
 //-----------------------------------------------------------------------------
 
 type Role struct {
-	Name    string    `json:"role_name" gorm:"type:string;primaryKey"`
+	Name    string    `json:"role_name" binding:"required" gorm:"type:string;primaryKey"`
 	Created time.Time `json:"-"`
 }
 
