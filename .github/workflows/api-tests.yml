@@ -122,12 +122,6 @@ jobs:
       - name: Show coverage summary
         run: go tool cover -func=cover.out
 
-      # List missed coverage lines using a Go script for accuracy.
-      # Place list_missed_lines.go in the tools/ directory.
-      - name: List missed coverage lines (Go script, robust)
-        run: |
-          go run ./tools/list_missed_lines.go cover.out
-
       # Generate HTML coverage report
       - name: Generate HTML coverage report
         run: |
