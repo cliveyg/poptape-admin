@@ -104,7 +104,7 @@ jobs:
       # and check test coverage percentage
       - name: Check test coverage is above threshold
         env:
-          TESTCOVERAGE_THRESHOLD: 15
+          TESTCOVERAGE_THRESHOLD: 80
         run: |
           echo "Checking test coverage is above threshold..."
           echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
@@ -131,12 +131,13 @@ jobs:
           # List all uncovered blocks/line ranges from cover.out
           grep -v "^mode:" cover.out | awk '
             {
-              split($2, lines, ",");
-              split(lines[1], start, ".");
-              split(lines[2], end, ".");
-              count = $4;
-              if (count == "0") {
-                print $1 ":" start[1] "-" end[1];
+              n = split($0, a, " ");
+              if (a[n] == "0") {
+                split(a[1], b, ":");
+                split(b[2], c, ",");
+                split(c[1], d, ".");
+                split(c[2], e, ".");
+                print b[1] ":" d[1] "-" e[1];
               }
             }'
 
