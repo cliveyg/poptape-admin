@@ -134,13 +134,18 @@ jobs:
           name: coverage-report
           path: coverage.html
 
-      - name: Enable debug logging
-        run: echo "ACTIONS_STEP_DEBUG=true" >> $GITHUB_ENV
+      - name: Install gcov2lcov
+        run: go install github.com/jandelgado/gcov2lcov@latest
+
+      - name: Convert Go cover.out to lcov.info
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gcov2lcov -infile cover.out -outfile coverage.lcov
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
         with:
           gist-id: c9188881d498a3e609cfcf4875845d9f
           token: ${{ secrets.GIST_TOKEN }}
-          coverage-file: cover.out
-          coverage-format: go
+          coverage-file: coverage.lcov
+          coverage-format: lcov
