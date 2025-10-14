@@ -13,13 +13,13 @@ jobs:
   unit-tests:
     name: Run api tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: /app
     container:
       image: ubuntu:latest
       volumes:
-        - ${{ github.workspace }}:/app
+        - ${{ github.workspace }}:/go/src/github.com/cliveyg/poptape-admin
+    defaults:
+      run:
+        working-directory: /go/src/github.com/cliveyg/poptape-admin
     services:
       # label used to access the service container
       pdb:
@@ -50,7 +50,7 @@ jobs:
           - 27017:27017
         # set health checks to wait until mongo has started
         options: >-
-          --health-cmd "echo 'db.runCommand("ping").ok' | mongosh --quiet"
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -88,67 +88,58 @@ jobs:
         run: |
           find . -type d -exec cp .env {}/.env \;
 
+      # Install bc for floating-point comparison in coverage check
+      - name: Install bc
+        run: apt-get update && apt-get install --yes --no-install-recommends bc
+
       # run unit tests
       - name: Run go test and generate test coverage file
         run: |
           set -e
           set -o pipefail
           touch poptape_admin.log
-          go test -v ./... -cover -coverprofile=./cover.out | tee test.out
+          go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
         shell: bash
 
       # and check test coverage percentage
       - name: Check test coverage is above threshold
         env:
-          TESTCOVERAGE_THRESHOLD: 0
+          TESTCOVERAGE_THRESHOLD: 15
         run: |
           echo "Checking test coverage is above threshold..."
           echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
-          totalCoverage=`go tool cover -func=cover.out | grep total | grep -Eo '[0-9]+\.[0-9]+'`
+          totalCoverage=$(go tool cover -func=cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
           echo "Current test coverage : $totalCoverage %"
           echo "-----------------------------------------------------------"
-          if awk "BEGIN {exit !($totalCoverage >= $TESTCOVERAGE_THRESHOLD)}";
-          then
-              echo "Coverage passed threshold OK"
+          if [ "$(echo "$totalCoverage >= $TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "Coverage passed threshold OK"
           else
-              echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
-              echo "Failed"
-              exit 1
+            echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
+            echo "Failed"
+            exit 1
           fi
           echo "-----------------------------------------------------------"
+        shell: bash
+
+      - name: Show coverage summary
+        run: go tool cover -func=cover.out
+
       - name: List missed coverage lines
         shell: bash
         run: |
-          go test -coverprofile=coverage.out ./...
           echo "Missed lines:"
-          awk '
-            BEGIN { OFS=" " }
-            /^mode:/ { next }
+          # List all uncovered blocks/line ranges from cover.out
+          grep -v "^mode:" cover.out | awk '
             {
-              for (i = 1; i <= NF; i += 4) {
-                block = $i
-                stmts = $(i+1)
-                count = $(i+2)
-                if (count == "0") {
-                  split(block, parts, ":")
-                  file = parts[1]
-                  rest = parts[2]
-                  split(rest, lines, ",")
-                  start = lines[1]
-                  end = lines[2]
-                  split(start, start_parts, ".")
-                  split(end, end_parts, ".")
-                  start_line = start_parts[1]
-                  end_line = end_parts[1]
-                  if (start_line == end_line) {
-                    print file ":" start_line
-                  } else {
-                    print file ":" start_line "-" end_line
-                  }
-                }
+              n = split($0, a, " ");
+              if (a[n] == "0") {
+                split(a[1], b, ":");
+                split(b[2], c, ",");
+                split(c[1], d, ".");
+                split(c[2], e, ".");
+                print b[1] ":" d[1] "-" e[1];
               }
-            }
-          ' coverage.out
+            }'
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
