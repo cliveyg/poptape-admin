@@ -620,3 +620,339 @@ func TestFetchUser_NonExistentUser(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, w.Code)
 	require.Contains(t, w.Body.String(), "User not found")
 }
+
+// --- AddRoleToUser and RemoveRoleFromUser Integration Tests ---
+
+func TestAddRoleToUser_HappyPath(t *testing.T) {
+	resetDB(t, TestApp)
+
+	// Setup: create and validate a user (default gets "admin" role)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	username := "roleuser_" + RandString(8)
+	password := "rolepass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	var user app.User
+	err := TestApp.DB.Where("username = ?", username).First(&user).Error
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, user.AdminId)
+
+	// Add a new role ("aws" is a seeded role)
+	addRoleReq, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aws", nil)
+	addRoleReq.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, addRoleReq)
+	require.Equal(t, http.StatusCreated, w2.Code)
+	require.Contains(t, w2.Body.String(), "Role [aws] added to user")
+}
+
+func TestAddRoleToUser_BadUUID(t *testing.T) {
+	resetDB(t, TestApp)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	req, _ := http.NewRequest("POST", "/admin/user/notauuid/aws", nil)
+	req.Header.Set("y-access-token", superToken)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request")
+}
+
+func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
+	resetDB(t, TestApp)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	// Create user
+	username := "missingroleuser_" + RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+
+	// Try to add a truly non-existent role
+	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/definitelynotarole", nil)
+	req2.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusNotFound, w2.Code)
+	require.Contains(t, w2.Body.String(), "Role does not exist")
+}
+
+func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
+	resetDB(t, TestApp)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	username := "alreadyroleuser_" + RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+
+	// Try to add the default "admin" role again
+	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/admin", nil)
+	req2.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusNotModified, w2.Code)
+	// Do not check body, as 304 may have empty body
+}
+
+func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
+	resetDB(t, TestApp)
+
+	// Create and validate a normal user (admin role)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	username := "adminroleuser_" + RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	// Login as the admin-role user
+	loginReq := map[string]string{
+		"username": username,
+		"password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ = json.Marshal(loginReq)
+	reqLogin, _ := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code)
+	var out struct{ Token string }
+	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
+	adminToken := out.Token
+
+	// Try to add a role as the admin user (should be forbidden)
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aws", nil)
+	req2.Header.Set("y-access-token", adminToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusForbidden, w2.Code)
+	require.Contains(t, w2.Body.String(), "Forbidden")
+}
+
+// --- RemoveRoleFromUser tests ---
+
+func TestRemoveRoleFromUser_HappyPath(t *testing.T) {
+	resetDB(t, TestApp)
+
+	// Setup: create and validate a user (default gets "admin" role)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	username := "removeuser_" + RandString(8)
+	password := "removeuserpass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	var user app.User
+	err := TestApp.DB.Where("username = ?", username).First(&user).Error
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, user.AdminId)
+
+	// Remove the "admin" role
+	removeRoleReq, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/admin", nil)
+	removeRoleReq.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, removeRoleReq)
+	require.Equal(t, http.StatusGone, w2.Code)
+	require.Contains(t, w2.Body.String(), "Role [admin] removed from user")
+}
+
+func TestRemoveRoleFromUser_BadUUID(t *testing.T) {
+	resetDB(t, TestApp)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	req, _ := http.NewRequest("DELETE", "/admin/user/notauuid/admin", nil)
+	req.Header.Set("y-access-token", superToken)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Bad request")
+}
+
+func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
+	resetDB(t, TestApp)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	username := "removenoroleuser_" + RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+
+	// Use a role that is not in the seeded list, is <=20 chars, and matches ^[a-z_]+$
+	roleName := "foobar"
+	var role app.Role
+	err := TestApp.DB.Where("name = ?", roleName).First(&role).Error
+	require.Error(t, err, "Role should not exist in DB")
+
+	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/"+roleName, nil)
+	req2.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusNotModified, w2.Code, "Should return 304 if user does not have the role (regardless of role existence)")
+	// Optionally, check message, but body may be empty for 304:
+	// require.Contains(t, w2.Body.String(), "Incorrect input")
+}
+
+func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
+	resetDB(t, TestApp)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	username := "notpresentuser_" + RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+
+	// Try to remove the "aws" role, which user does NOT have
+	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/aws", nil)
+	req2.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusNotModified, w2.Code)
+	// Do not check body, as 304 may be empty
+}
+
+func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
+	resetDB(t, TestApp)
+
+	// Create and validate a normal user (admin role)
+	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	username := "removeadmin_" + RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	// Login as the admin-role user
+	loginReq := map[string]string{
+		"username": username,
+		"password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ = json.Marshal(loginReq)
+	reqLogin, _ := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code)
+	var out struct{ Token string }
+	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
+	adminToken := out.Token
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+	req2, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/admin", nil)
+	req2.Header.Set("y-access-token", adminToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusForbidden, w2.Code)
+	require.Contains(t, w2.Body.String(), "Forbidden")
+}
