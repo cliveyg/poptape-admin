@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/google/uuid"
 	"net/http"
@@ -955,4 +956,161 @@ func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusForbidden, w2.Code)
 	require.Contains(t, w2.Body.String(), "Forbidden")
+}
+
+func TestFetchAllUsers_HappyPath_Super(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Create additional users
+	for i := 0; i < 2; i++ {
+		username := "fetchall_" + RandString(5) + fmt.Sprint(i)
+		password := "pw"
+		userReq := map[string]string{
+			"username":         username,
+			"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+			"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+		}
+		body, _ := json.Marshal(userReq)
+		req, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+		req.Header.Set("y-access-token", token)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		TestApp.Router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusCreated, w.Code)
+		setUserValidated(t, TestApp, username)
+	}
+
+	req, _ := http.NewRequest("GET", "/admin/users", nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Users []app.User `json:"users"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	require.GreaterOrEqual(t, len(resp.Users), 3)
+}
+
+func TestFetchAllUsers_HappyPath_Admin(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	username := "fetchadmin_" + RandString(5)
+	password := "pw"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	// Login as admin user
+	loginReq := map[string]string{
+		"username": username,
+		"password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ = json.Marshal(loginReq)
+	reqLogin, _ := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code)
+	var out struct{ Token string }
+	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
+	adminToken := out.Token
+
+	req2, _ := http.NewRequest("GET", "/admin/users", nil)
+	req2.Header.Set("y-access-token", adminToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusOK, w2.Code)
+	var resp struct {
+		Users []app.User `json:"users"`
+	}
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&resp))
+	require.GreaterOrEqual(t, len(resp.Users), 2)
+}
+
+func TestFetchAllUsers_Forbidden_OtherRole(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	username := "nonprivuser_" + RandString(6)
+	password := "pw"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+
+	// Add "aws" role
+	var user app.User
+	require.NoError(t, TestApp.DB.Where("username = ?", username).First(&user).Error)
+	addRoleReq, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aws", nil)
+	addRoleReq.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, addRoleReq)
+	require.Equal(t, http.StatusCreated, w2.Code)
+
+	// Remove "admin" role
+	removeRoleReq, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/admin", nil)
+	removeRoleReq.Header.Set("y-access-token", token)
+	w3 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w3, removeRoleReq)
+	require.Equal(t, http.StatusGone, w3.Code)
+
+	// Login as user (now only "aws" role)
+	loginReq := map[string]string{
+		"username": username,
+		"password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ = json.Marshal(loginReq)
+	reqLogin, _ := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code)
+	var out struct{ Token string }
+	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
+	awsToken := out.Token
+
+	req2, _ := http.NewRequest("GET", "/admin/users", nil)
+	req2.Header.Set("y-access-token", awsToken)
+	w2 = httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusForbidden, w2.Code)
+	require.Contains(t, w2.Body.String(), "Forbidden")
+}
+
+func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
+	resetDB(t, TestApp)
+	req, _ := http.NewRequest("GET", "/admin/users", nil)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
