@@ -4,27 +4,38 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/stretchr/testify/require"
 )
 
-// Helper to construct a valid creds payload
-func validCredsPayload() map[string]interface{} {
+func randomB64Password() string {
+	rand.Seed(time.Now().UnixNano())
+	raw := make([]byte, 16)
+	for i := range raw {
+		raw[i] = byte(rand.Intn(26) + 65)
+	}
+	return base64.StdEncoding.EncodeToString(raw)
+}
+
+func uniqueCredsPayload() map[string]interface{} {
+	uniq := RandString(8)
 	return map[string]interface{}{
-		"db_name":     "poptape_items",
+		"db_name":     "db_" + uniq,
 		"type":        "mongo",
-		"url":         "/items",
-		"db_username": "poptape_items",
-		"db_password": "cGFzc3dvcmQ=",
+		"url":         "/" + uniq,
+		"db_username": "user_" + uniq,
+		"db_password": randomB64Password(),
 		"db_port":     "27017",
-		"host":        "poptape-items-mongodb-1",
-		"role_name":   "items",
-		"ms_name":     "items",
+		"host":        "host-" + uniq,
+		"role_name":   "role_" + uniq,
+		"ms_name":     "ms_" + uniq,
 	}
 }
 
@@ -36,7 +47,7 @@ func TestCreateCreds_HappyPath_Super(t *testing.T) {
 	require.NotEmpty(t, superPass)
 	token := loginAndGetToken(t, TestApp, superUser, superPass)
 
-	payload := validCredsPayload()
+	payload := uniqueCredsPayload()
 	body, _ := json.Marshal(payload)
 
 	req, err := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
@@ -59,7 +70,6 @@ func TestCreateCreds_HappyPath_Admin(t *testing.T) {
 	require.NotEmpty(t, superPass)
 	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
 
-	// Create & validate an admin user
 	adminUsername := "admincreds_" + RandString(6)
 	adminPassword := "pw"
 	userReq := map[string]string{
@@ -76,7 +86,6 @@ func TestCreateCreds_HappyPath_Admin(t *testing.T) {
 	require.Equal(t, http.StatusCreated, w.Code)
 	setUserValidated(t, TestApp, adminUsername)
 
-	// Login as admin user
 	loginReq := map[string]string{
 		"username": adminUsername,
 		"password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
@@ -91,8 +100,8 @@ func TestCreateCreds_HappyPath_Admin(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w2.Body).Decode(&out))
 	adminToken := out.Token
 
-	creds := validCredsPayload()
-	body, _ = json.Marshal(creds)
+	payload := uniqueCredsPayload()
+	body, _ = json.Marshal(payload)
 	req3, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
 	req3.Header.Set("y-access-token", adminToken)
 	req3.Header.Set("Content-Type", "application/json")
@@ -151,8 +160,8 @@ func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
 	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
 	awsToken := out.Token
 
-	creds := validCredsPayload()
-	body, _ = json.Marshal(creds)
+	payload := uniqueCredsPayload()
+	body, _ = json.Marshal(payload)
 	req4, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
 	req4.Header.Set("y-access-token", awsToken)
 	req4.Header.Set("Content-Type", "application/json")
@@ -164,8 +173,8 @@ func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
 
 func TestCreateCreds_Unauthorized_NoToken(t *testing.T) {
 	resetDB(t, TestApp)
-	creds := validCredsPayload()
-	body, _ := json.Marshal(creds)
+	payload := uniqueCredsPayload()
+	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -180,9 +189,9 @@ func TestCreateCreds_Fail_InvalidDBType(t *testing.T) {
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := loginAndGetToken(t, TestApp, superUser, superPass)
-	creds := validCredsPayload()
-	creds["type"] = "sqlserver"
-	body, _ := json.Marshal(creds)
+	payload := uniqueCredsPayload()
+	payload["type"] = "sqlserver"
+	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
@@ -215,9 +224,9 @@ func TestCreateCreds_Fail_MissingRequiredFields(t *testing.T) {
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := loginAndGetToken(t, TestApp, superUser, superPass)
-	creds := validCredsPayload()
-	delete(creds, "db_password")
-	body, _ := json.Marshal(creds)
+	payload := uniqueCredsPayload()
+	delete(payload, "db_password")
+	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
@@ -234,9 +243,9 @@ func TestCreateCreds_Fail_InvalidBase64Password(t *testing.T) {
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := loginAndGetToken(t, TestApp, superUser, superPass)
-	creds := validCredsPayload()
-	creds["db_password"] = "!!!notbase64!!!"
-	body, _ := json.Marshal(creds)
+	payload := uniqueCredsPayload()
+	payload["db_password"] = "!!!notbase64!!!"
+	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
