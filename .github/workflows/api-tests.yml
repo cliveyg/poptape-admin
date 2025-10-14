@@ -116,6 +116,8 @@ jobs:
               exit 1
           fi
           echo "-----------------------------------------------------------"
+          echo cover.out
+          echo "-----------------------------------------------------------"
         shell: bash
 
       - name: List missed coverage lines
