@@ -121,6 +121,31 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code, "login as new user should return 200")
 }
 
+func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
+	resetDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+
+	loginReq := map[string]string{
+		"username": superUser,
+	}
+	body, _ := json.Marshal(loginReq)
+	req, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code, "login with missing password field return 400")
+
+	var resp map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Contains(t, resp, "message")
+	require.Equal(t, "Bad request", resp["message"])
+
+}
+
 func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
 	resetDB(t, TestApp)
 
