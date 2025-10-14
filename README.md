@@ -1,4 +1,4 @@
-![All tests pass](https://github.com/cliveyg/poptape-admin/actions/workflows/api-tests.yml/badge.svg) ![Tests passed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/cliveyg/c9188881d498a3e609cfcf4875845d9f/raw/422a20cedb3ed99eeb6cee483bbbdd4321400dd4/poptape-admin-go-tests.json&label=Tests) ![Test coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/cliveyg/c9188881d498a3e609cfcf4875845d9f/raw/422a20cedb3ed99eeb6cee483bbbdd4321400dd4/poptape-admin-go-coverage.json&label=Test%20Coverage)
+![All tests pass](https://github.com/cliveyg/poptape-admin/actions/workflows/api-tests.yml/badge.svg) ![Tests passed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/cliveyg/c9188881d498a3e609cfcf4875845d9f/raw/3ac7b5dc27ad1ccc56d98b184959bd09c9bfa8b6/poptape-admin-go-tests.json&label=Tests) ![Test coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/cliveyg/c9188881d498a3e609cfcf4875845d9f/raw/3ac7b5dc27ad1ccc56d98b184959bd09c9bfa8b6/poptape-admin-lcov-coverage.json&label=Test%20Coverage)
 
 # poptape-admin
 
