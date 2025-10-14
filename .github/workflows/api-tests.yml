@@ -124,22 +124,23 @@ jobs:
       - name: Show coverage summary
         run: go tool cover -func=cover.out
 
+      - name: Debug coverage line parsing
+        shell: bash
+        run: |
+          echo "AWK field test:"
+          grep -v "^mode:" cover.out | awk '{ print "FIELD1="$1, "FIELD2="$2, "FIELD3="$3, "LAST="$NF, "ALL="$0 }'
+
       - name: List missed coverage lines
         shell: bash
         run: |
           echo "Missed lines:"
-          # List all uncovered blocks/line ranges from cover.out
-          grep -v "^mode:" cover.out | awk '
-            {
-              n = split($0, a, " ");
-              if (a[n] == "0") {
-                split(a[1], b, ":");
-                split(b[2], c, ",");
-                split(c[1], d, ".");
-                split(c[2], e, ".");
-                print b[1] ":" d[1] "-" e[1];
-              }
-            }'
+          grep -v "^mode:" cover.out | awk '$3 == 0 {
+            split($1, a, ":");
+            split(a[2], b, ",");
+            split(b[1], c, ".");
+            split(b[2], d, ".");
+            printf "%s:%s-%s\n", a[1], c[1], d[1];
+          }'
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
