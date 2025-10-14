@@ -490,8 +490,25 @@ func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
 
 	setUserValidated(t, TestApp, adminUsername)
 
-	// 2. Login as admin user
-	adminToken := loginAndGetToken(t, TestApp, adminUsername, adminPassword)
+	// 2. Login as admin user (match how other tests do user logins)
+	loginReq := map[string]string{
+		"username": adminUsername,
+		"password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+	}
+	body, _ = json.Marshal(loginReq)
+	reqLogin, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code, "login should return 200")
+
+	var out struct {
+		Token string `json:"token"`
+	}
+	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
+	require.NotEmpty(t, out.Token)
+	adminToken := out.Token
 
 	// 3. Create another normal user to be deleted
 	otherUsername := "victimuser_" + RandString(8)
