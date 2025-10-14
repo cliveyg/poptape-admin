@@ -187,6 +187,6 @@ func IsValidUUIDString(s string) bool {
 //-----------------------------------------------------------------------------
 
 func IsAcceptedString(s string) bool {
-	var uuidRegex = regexp.MustCompile("^[a-z_]$")
+	var uuidRegex = regexp.MustCompile("^[a-z_]+$")
 	return uuidRegex.MatchString(s)
 }
