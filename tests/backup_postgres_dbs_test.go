@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/app"
@@ -148,7 +150,14 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	dlStream.Close()
 
-	fixture, err := os.ReadFile("tests/fixtures/reviews.dump")
+	// Always resolve the absolute fixture path
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("unable to determine caller for fixture path")
+	}
+	testsDir := filepath.Dir(thisFile)
+	fixturePath := filepath.Join(testsDir, "fixtures", "reviews.dump")
+	fixture, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
 	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
 }

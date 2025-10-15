@@ -81,7 +81,10 @@ jobs:
       - name: List files in tests/fixtures
         run: ls -l tests/fixtures
 
+      # all tests:
       # go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
+      # individual test:
+      # go test -v -cover -coverprofile=cover.out ./tests -run '^TestBackupPostgres_HappyPath$' | tee test.out
       # Only run the single test TestBackupPostgres_HappyPath in the tests package
       - name: Run only TestBackupPostgres_HappyPath and generate test coverage file (excluding tests and testutils from coverage report)
         run: |
