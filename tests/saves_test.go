@@ -44,6 +44,12 @@ func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
 	superPass := os.Getenv("SUPERPASS")
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
+	// Debug: print all records in saverecords table
+	var saves []app.SaveRecord
+	err := TestApp.DB.Find(&saves).Error
+	require.NoError(t, err)
+	t.Logf("DEBUG: SaveRecords in DB before API call: %v", saves)
+
 	req, _ := http.NewRequest("GET", "/admin/saves", nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
