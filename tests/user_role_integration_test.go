@@ -19,7 +19,7 @@ import (
 )
 
 func TestSuperuserLogin(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS") // Already base64 encoded!
@@ -46,7 +46,7 @@ func TestSuperuserLogin(t *testing.T) {
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -90,7 +90,7 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 }
 
 func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
@@ -115,7 +115,7 @@ func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
 }
 
 func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
@@ -134,7 +134,7 @@ func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
 }
 
 func TestUserLogin_Fail_WrongPassword(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	// Setup: create and validate a user
 	superUser := os.Getenv("SUPERUSER")
@@ -178,7 +178,7 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 // --- Failure tests for CreateUser (handlers.go) ---
 
 func TestCreateUser_Fail_BadJSON(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -197,7 +197,7 @@ func TestCreateUser_Fail_BadJSON(t *testing.T) {
 }
 
 func TestCreateUser_Fail_PasswordsDontMatch(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -221,7 +221,7 @@ func TestCreateUser_Fail_PasswordsDontMatch(t *testing.T) {
 }
 
 func TestCreateUser_Fail_BadBase64Password(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -245,7 +245,7 @@ func TestCreateUser_Fail_BadBase64Password(t *testing.T) {
 }
 
 func TestCreateUser_Fail_DBCreateError_DuplicateUsername(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -281,7 +281,7 @@ func TestCreateUser_Fail_DBCreateError_DuplicateUsername(t *testing.T) {
 }
 
 func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -305,7 +305,7 @@ func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
 }
 
 func TestLogin_GenerateTokenError(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	// save original function
 	orig := utils.GenerateToken
 	defer func() { utils.GenerateToken = orig }()
@@ -342,7 +342,7 @@ func TestLogin_GenerateTokenError(t *testing.T) {
 // --- Tests for DeleteUser and FetchUser routes ---
 
 func TestDeleteUser_HappyPath(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -393,7 +393,7 @@ func TestDeleteUser_HappyPath(t *testing.T) {
 }
 
 func TestDeleteUser_BadUUID(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -410,7 +410,7 @@ func TestDeleteUser_BadUUID(t *testing.T) {
 }
 
 func TestDeleteUser_NonExistentUser(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -428,7 +428,7 @@ func TestDeleteUser_NonExistentUser(t *testing.T) {
 }
 
 func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -510,7 +510,7 @@ func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
 }
 
 func TestFetchUser_HappyPath(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -552,7 +552,7 @@ func TestFetchUser_HappyPath(t *testing.T) {
 }
 
 func TestFetchUser_BadUUID(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -569,7 +569,7 @@ func TestFetchUser_BadUUID(t *testing.T) {
 }
 
 func TestFetchUser_NonExistentUser(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -589,7 +589,7 @@ func TestFetchUser_NonExistentUser(t *testing.T) {
 // --- AddRoleToUser and RemoveRoleFromUser Integration Tests ---
 
 func TestAddRoleToUser_HappyPath(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	// Setup: create and validate a user (default gets "admin" role)
 	superUser := os.Getenv("SUPERUSER")
@@ -629,7 +629,7 @@ func TestAddRoleToUser_HappyPath(t *testing.T) {
 }
 
 func TestAddRoleToUser_BadUUID(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	req, _ := http.NewRequest("POST", "/admin/user/notauuid/aws", nil)
@@ -641,7 +641,7 @@ func TestAddRoleToUser_BadUUID(t *testing.T) {
 }
 
 func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	// Create user
@@ -674,7 +674,7 @@ func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
 }
 
 func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	username := "alreadyroleuser_" + testutils.RandString(8)
@@ -706,7 +706,7 @@ func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
 }
 
 func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	// Create and validate a normal user (admin role)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
@@ -755,7 +755,7 @@ func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
 // --- RemoveRoleFromUser tests ---
 
 func TestRemoveRoleFromUser_HappyPath(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	// Setup: create and validate a user (default gets "admin" role)
 	superUser := os.Getenv("SUPERUSER")
@@ -795,7 +795,7 @@ func TestRemoveRoleFromUser_HappyPath(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_BadUUID(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	req, _ := http.NewRequest("DELETE", "/admin/user/notauuid/admin", nil)
@@ -807,7 +807,7 @@ func TestRemoveRoleFromUser_BadUUID(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	username := "removenoroleuser_" + testutils.RandString(8)
@@ -845,7 +845,7 @@ func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	username := "notpresentuser_" + testutils.RandString(8)
@@ -877,7 +877,7 @@ func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 
 	// Create and validate a normal user (admin role)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
@@ -923,7 +923,7 @@ func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
 }
 
 func TestFetchAllUsers_HappyPath_Super(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -962,7 +962,7 @@ func TestFetchAllUsers_HappyPath_Super(t *testing.T) {
 }
 
 func TestFetchAllUsers_HappyPath_Admin(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
@@ -1011,7 +1011,7 @@ func TestFetchAllUsers_HappyPath_Admin(t *testing.T) {
 }
 
 func TestFetchAllUsers_Forbidden_OtherRole(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
@@ -1072,7 +1072,7 @@ func TestFetchAllUsers_Forbidden_OtherRole(t *testing.T) {
 }
 
 func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/users", nil)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
@@ -1080,7 +1080,7 @@ func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
 }
 
 func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -1107,7 +1107,7 @@ func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
 
 // Admin happy path
 func TestListAllRoles_HappyPath_Admin(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
@@ -1159,7 +1159,7 @@ func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 
 // Forbidden for non-privileged user (e.g., aws role only)
 func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
@@ -1217,7 +1217,7 @@ func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 
 // Unauthorized: No token
 func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/roles", nil)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
@@ -1226,7 +1226,7 @@ func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
 
 // No roles: Access forbidden even to superuser/admin (middleware blocks)
 func TestListAllRoles_NoRoles_Forbidden(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM user_role").Error)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM roles").Error)
 	superUser := os.Getenv("SUPERUSER")

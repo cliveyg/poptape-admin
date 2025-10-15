@@ -73,7 +73,7 @@ func uniqueCredsPayload() map[string]interface{} {
 }
 
 func TestCreateCreds_HappyPath_Super(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -96,7 +96,7 @@ func TestCreateCreds_HappyPath_Super(t *testing.T) {
 }
 
 func TestCreateCreds_HappyPath_Admin(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -145,7 +145,7 @@ func TestCreateCreds_HappyPath_Admin(t *testing.T) {
 }
 
 func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -205,7 +205,7 @@ func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
 }
 
 func TestCreateCreds_Unauthorized_NoToken(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	payload := uniqueCredsPayload()
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
@@ -216,7 +216,7 @@ func TestCreateCreds_Unauthorized_NoToken(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_InvalidDBType(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -235,7 +235,7 @@ func TestCreateCreds_Fail_InvalidDBType(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_BadJSON(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -251,7 +251,7 @@ func TestCreateCreds_Fail_BadJSON(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_MissingRequiredFields(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -270,7 +270,7 @@ func TestCreateCreds_Fail_MissingRequiredFields(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_InvalidBase64Password(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -289,7 +289,7 @@ func TestCreateCreds_Fail_InvalidBase64Password(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_MicroserviceBind(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -320,7 +320,7 @@ func TestCreateCreds_Fail_MicroserviceBind(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_RoleBind(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -351,7 +351,7 @@ func TestCreateCreds_Fail_RoleBind(t *testing.T) {
 }
 
 func TestFetchCredsById_HappyPath_Super(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -376,7 +376,7 @@ func TestFetchCredsById_HappyPath_Super(t *testing.T) {
 }
 
 func TestFetchCredsById_HappyPath_Admin(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -430,7 +430,7 @@ func TestFetchCredsById_HappyPath_Admin(t *testing.T) {
 }
 
 func TestFetchCredsById_Forbidden_NonPrivilegedRole(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -489,7 +489,7 @@ func TestFetchCredsById_Forbidden_NonPrivilegedRole(t *testing.T) {
 }
 
 func TestFetchCredsById_Unauthorized_NoToken(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -504,7 +504,7 @@ func TestFetchCredsById_Unauthorized_NoToken(t *testing.T) {
 }
 
 func TestFetchCredsById_BadUUID(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
@@ -520,7 +520,7 @@ func TestFetchCredsById_BadUUID(t *testing.T) {
 }
 
 func TestFetchCredsById_NotFound(t *testing.T) {
-	testutils.ResetDB(t, TestApp)
+	testutils.ResetPostgresDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)

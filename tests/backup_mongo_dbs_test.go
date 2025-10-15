@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -22,12 +23,11 @@ import (
 	"net/http/httptest"
 )
 
-func TestBackupPostgres_HappyPath(t *testing.T) {
+func TestBackupMongo_HappyPath(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
 
-	// The db_name to use for the test and for MongoDB checks
-	dbName := "poptape_reviews"
+	dbName := "poptape_fotos"
 
 	// Setup MongoDB test client and drop test DB to start clean
 	mongoClient := testutils.TestMongoClient(t)
@@ -41,17 +41,17 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	// Create reviews cred via API
+	// Create mongo cred via API
 	payload := map[string]interface{}{
 		"db_name":     dbName,
-		"type":        "postgres",
-		"url":         "/reviews",
-		"db_username": "poptape_reviews",
+		"type":        "mongo",
+		"url":         "/fotos",
+		"db_username": "poptape_fotos",
 		"db_password": base64.StdEncoding.EncodeToString([]byte("password")),
-		"db_port":     "5432",
-		"host":        "poptape-reviews-db-1",
-		"role_name":   "reviews",
-		"ms_name":     "reviews",
+		"db_port":     "27017",
+		"host":        "poptape-fotos-db-1",
+		"role_name":   "fotos",
+		"ms_name":     "fotos",
 	}
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
@@ -63,7 +63,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	var resp struct{ Message string }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 
-	// Get microservice_id for "reviews" from API
+	// Get microservice_id for "fotos" from API
 	reqMS, _ := http.NewRequest("GET", "/admin/microservices", nil)
 	reqMS.Header.Set("y-access-token", token)
 	wMS := httptest.NewRecorder()
@@ -80,18 +80,18 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, json.Unmarshal(wMS.Body.Bytes(), &msResp))
 	var msID string
 	for _, ms := range msResp.Microservices {
-		if ms.MSName == "reviews" {
+		if ms.MSName == "fotos" {
 			msID = ms.MicroserviceId
 			break
 		}
 	}
-	require.NotEmpty(t, msID, "could not find microservice_id for reviews")
+	require.NotEmpty(t, msID, "could not find microservice_id for fotos")
 
-	// Mock CommandRunner for pg_dump with the correct fixture for postgres
+	// Mock CommandRunner for mongodump
 	TestApp.CommandRunner = &testutils.MockCommandRunner{
 		T: t,
 		Fixtures: map[string]string{
-			"pg_dump": "reviews.dump", // must be in testutils/fixtures/
+			"mongodump": "fotos.dump", // must be in testutils/fixtures/
 		},
 	}
 
@@ -109,7 +109,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 		SaveID    string `json:"save_id"`
 	}
 	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &backupResp))
-	require.Contains(t, backupResp.Message, "postgres db saved")
+	require.Contains(t, backupResp.Message, "mongo db saved")
 	require.NotZero(t, backupResp.NoOfBytes)
 	require.NotEmpty(t, backupResp.SaveID)
 
@@ -119,7 +119,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, TestApp.DB.Where("save_id = ?", saveUUID).First(&saveRec).Error)
 	require.Equal(t, dbName, saveRec.DBName)
-	require.Equal(t, "postgres", saveRec.Type)
+	require.Equal(t, "mongo", saveRec.Type)
 
 	// Print debug info for what we are searching for
 	fmt.Printf("Test is searching for save_id: '%v'\n", backupResp.SaveID)
@@ -156,15 +156,15 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	dlStream.Close()
 
-	// Always resolve the fixture path from the repo root: testutils/fixtures/reviews.dump
+	// Always resolve the fixture path from the repo root: testutils/fixtures/fotos.dump
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatalf("unable to determine caller for fixture path")
 	}
 	testsDir := filepath.Dir(thisFile)
 	rootDir := filepath.Dir(testsDir)
-	fixturePath := filepath.Join(rootDir, "testutils", "fixtures", "reviews.dump")
+	fixturePath := filepath.Join(rootDir, "testutils", "fixtures", "fotos.dump")
 	fixture, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
-	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
+	require.Equal(t, sha256.Sum256(fixture), sha256.Sum256(buf.Bytes()), "SHA256 of GridFS backup does not match fixture")
 }

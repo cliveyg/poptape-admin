@@ -28,8 +28,9 @@ func TestMain(m *testing.M) {
 	// 1. Migrate schema
 	TestApp.InitialiseApp()
 
-	// 2. Truncate and reseed database
-	testutils.ResetDB(nil, TestApp)
+	// 2. Truncate and reseed postgres database and reset Mongo to defaults
+	testutils.ResetPostgresDB(nil, TestApp)
+	testutils.ResetMongoDB(nil, TestApp)
 
 	code := m.Run()
 	os.Exit(code)

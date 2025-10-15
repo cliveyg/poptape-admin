@@ -82,13 +82,13 @@ jobs:
       # go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
       # individual test:
       # go test -v -cover -coverprofile=cover.out ./tests -run '^TestBackupPostgres_HappyPath$' | tee test.out
-      # Only run the single test TestBackupPostgres_HappyPath in the tests package
-      - name: Run only TestBackupPostgres_HappyPath and generate test coverage file (excluding tests and testutils from coverage report)
+      # Only run the single test TestBackupMongo_HappyPath in the tests package
+      - name: Run tests and generate test coverage file (excluding tests and testutils from coverage report)
         run: |
           set -e
           set -o pipefail
           touch poptape_admin.log
-          go test -v -cover -coverprofile=cover.out ./tests -run '^TestBackupPostgres_HappyPath$' | tee test.out
+          go test -v -cover -coverprofile=cover.out ./tests -run '^TestBackupMongo_HappyPath$' | tee test.out
           grep -v '/tests/' cover.out | grep -v '/testutils/' > cover.out.filtered
           mv cover.out.filtered cover.out
         shell: bash
