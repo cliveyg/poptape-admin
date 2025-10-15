@@ -113,7 +113,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.Equal(t, "poptape_reviews", saveRec.DBName)
 	require.Equal(t, "postgres", saveRec.Type)
 
-	// Check file saved in MongoDB GridFS
+	// Check file saved in MongoDB GridFS by metadata.save_id
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
@@ -122,10 +122,12 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	gfs, err := gridfs.NewBucket(mongoClient.Database(mongoDBName))
 	require.NoError(t, err)
 
-	cursor, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(ctx, bson.M{})
+	// Query GridFS file by metadata.save_id
+	filter := bson.M{"metadata.save_id": backupResp.SaveID}
+	cursor, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(ctx, filter)
 	require.NoError(t, err)
 	defer cursor.Close(ctx)
-	require.True(t, cursor.Next(ctx), "No GridFS file found")
+	require.True(t, cursor.Next(ctx), "No GridFS file found with metadata.save_id")
 	var fileDoc bson.M
 	require.NoError(t, cursor.Decode(&fileDoc))
 	fileID := fileDoc["_id"]
