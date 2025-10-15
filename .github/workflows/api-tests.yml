@@ -78,6 +78,9 @@ jobs:
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
+      - name: List files in tests/fixtures
+        run: ls -l tests/fixtures
+
       # go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
       # Only run the single test TestBackupPostgres_HappyPath in the tests package
       - name: Run only TestBackupPostgres_HappyPath and generate test coverage file (excluding tests and testutils from coverage report)

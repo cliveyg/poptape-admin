@@ -27,4 +27,4 @@
 !testutils/*
 !tests/*
 !tests/fixtures/
-!tests/fixtures/reviews.dump
+!tests/fixtures/**
