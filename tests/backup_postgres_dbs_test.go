@@ -9,15 +9,13 @@ import (
 	"io"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"net/http"
 	"net/http/httptest"
 )
@@ -25,12 +23,12 @@ import (
 func TestBackupPostgres_HappyPath(t *testing.T) {
 	resetDB(t, TestApp)
 
-	mongoURI := os.Getenv("MONGO_URI")
-	if mongoURI == "" {
-		mongoURI = "mongodb://localhost:27017"
-	}
-	mongoDBName := "poptape_reviews"
-	resetMongo(t, mongoURI, mongoDBName)
+	// Setup MongoDB test client and drop test DB to start clean
+	mongoDBName := os.Getenv("MONGO_DBNAME")
+	mongoClient := testutils.TestMongoClient(t)
+	defer mongoClient.Disconnect(context.Background())
+	err := mongoClient.Database(mongoDBName).Drop(context.Background())
+	require.NoError(t, err)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -114,20 +112,14 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.Equal(t, "postgres", saveRec.Type)
 
 	// Check file saved in MongoDB GridFS by metadata.save_id
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	require.NoError(t, err)
-	defer mongoClient.Disconnect(ctx)
 	gfs, err := gridfs.NewBucket(mongoClient.Database(mongoDBName))
 	require.NoError(t, err)
 
-	// Query GridFS file by metadata.save_id
 	filter := bson.M{"metadata.save_id": backupResp.SaveID}
-	cursor, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(ctx, filter)
+	cursor, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(context.Background(), filter)
 	require.NoError(t, err)
-	defer cursor.Close(ctx)
-	require.True(t, cursor.Next(ctx), "No GridFS file found with metadata.save_id")
+	defer cursor.Close(context.Background())
+	require.True(t, cursor.Next(context.Background()), "No GridFS file found with metadata.save_id")
 	var fileDoc bson.M
 	require.NoError(t, cursor.Decode(&fileDoc))
 	fileID := fileDoc["_id"]
