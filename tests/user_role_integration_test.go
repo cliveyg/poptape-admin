@@ -1085,7 +1085,6 @@ func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-// Happy path: Superuser can list all roles
 func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -1112,7 +1111,7 @@ func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
 	}
 }
 
-// Happy path: Admin user can list all roles
+// Admin happy path
 func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -1164,7 +1163,7 @@ func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 	}
 }
 
-// Forbidden: Non-privileged user (only "aws" role) cannot list roles
+// Forbidden for non-privileged user (e.g., aws role only)
 func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -1222,7 +1221,7 @@ func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 	require.Contains(t, w4.Body.String(), "Forbidden")
 }
 
-// Unauthorized: No token provided
+// Unauthorized: No token
 func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
 	resetDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/roles", nil)
@@ -1231,14 +1230,11 @@ func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-// InternalServerError: No roles exist in the table (remove all roles and user_role entries)
-func TestListAllRoles_InternalServerError_WhenNoRoles(t *testing.T) {
+// No roles: Access forbidden even to superuser/admin (middleware blocks)
+func TestListAllRoles_NoRoles_Forbidden(t *testing.T) {
 	resetDB(t, TestApp)
-	// Remove all role assignments and roles (respect FK constraints)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM user_role").Error)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM roles").Error)
-
-	// Use superuser
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	token := loginAndGetToken(t, TestApp, superUser, superPass)
@@ -1246,6 +1242,6 @@ func TestListAllRoles_InternalServerError_WhenNoRoles(t *testing.T) {
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusInternalServerError, w.Code)
-	require.Contains(t, w.Body.String(), "Something went neee")
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "Forbidden")
 }
