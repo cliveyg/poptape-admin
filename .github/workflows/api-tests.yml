@@ -55,8 +55,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      # add install ca certs step to prevent tls error messages
-      # when installing golang deps
       - name: Install ca certs dependency
         run: |
           apt-get update && apt-get install --yes --no-install-recommends ca-certificates
@@ -73,11 +71,9 @@ jobs:
         run: |
           go mod tidy
 
-      # run go build and output binary to dev null as it's not used for running unit tests
       - name: Run go build
         run: go build -o /dev/null ./...
 
-      # have to create an .env file to be able to run unit tests
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
@@ -86,20 +82,25 @@ jobs:
         run: |
           find . -type d -exec cp .env {}/.env \;
 
-      # Install bc for floating-point comparison in coverage check
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
-      # run unit tests
-      - name: Run go test and generate test coverage file
+      - name: Run go test and generate test coverage file (excluding tests and testutils)
         run: |
           set -e
           set -o pipefail
           touch poptape_admin.log
-          go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
+          # List packages except those in tests and testutils
+          packages=$(go list ./... | grep -v '/tests' | grep -v '/testutils')
+          # Prepare coverpkg by joining with commas
+          coverpkg=$(echo $packages | tr ' ' ',')
+          # Run tests and generate coverage
+          go test -v $packages -cover -coverpkg=$coverpkg -coverprofile=cover.out | tee test.out
+          # Remove cover entries from tests and testutils folders if any still present
+          grep -v '/tests/' cover.out | grep -v '/testutils/' > cover.out.filtered
+          mv cover.out.filtered cover.out
         shell: bash
 
-      # and check test coverage percentage
       - name: Check test coverage is above threshold
         env:
           TESTCOVERAGE_THRESHOLD: 15
@@ -122,12 +123,10 @@ jobs:
       - name: Show coverage summary
         run: go tool cover -func=cover.out
 
-      # Generate HTML coverage report
       - name: Generate HTML coverage report
         run: |
           go tool cover -html=cover.out -o coverage.html
 
-      # Upload HTML coverage report as an artifact so you can download it after the workflow run
       - name: Upload HTML coverage report
         uses: actions/upload-artifact@v4
         with:
