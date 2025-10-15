@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/google/uuid"
 	"net/http"
@@ -25,7 +26,7 @@ func getFirstRoleName(t *testing.T) string {
 }
 
 func TestSuperuserLogin(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS") // Already base64 encoded!
@@ -52,17 +53,17 @@ func TestSuperuserLogin(t *testing.T) {
 }
 
 func TestUserCRUD_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
 	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
 
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// 1. Create a new user
-	userUsername := "testuser1_" + RandString(8)
+	userUsername := "testuser1_" + testutils.RandString(8)
 	userPassword := "testpass1"
 	userReq := map[string]string{
 		"username":         userUsername,
@@ -79,7 +80,7 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 	require.Equal(t, http.StatusCreated, w.Code, "user create should return 201")
 
 	// 2. Validate user in DB
-	setUserValidated(t, TestApp, userUsername)
+	testutils.SetUserValidated(t, TestApp, userUsername)
 
 	// 3. Login as new user
 	loginReq := map[string]string{
@@ -96,7 +97,7 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 }
 
 func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
@@ -121,7 +122,7 @@ func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
 }
 
 func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
@@ -140,16 +141,16 @@ func TestSuperuserLogin_Fail_WrongPassword(t *testing.T) {
 }
 
 func TestUserLogin_Fail_WrongPassword(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// Setup: create and validate a user
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
 	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	userUsername := "testuser1_fail_" + RandString(8)
+	userUsername := "testuser1_fail_" + testutils.RandString(8)
 	userPassword := "testpass1_fail"
 	userReq := map[string]string{
 		"username":         userUsername,
@@ -165,7 +166,7 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, "user create should return 201")
 
-	setUserValidated(t, TestApp, userUsername)
+	testutils.SetUserValidated(t, TestApp, userUsername)
 
 	// Now: try logging in with wrong password
 	loginReq := map[string]string{
@@ -184,12 +185,12 @@ func TestUserLogin_Fail_WrongPassword(t *testing.T) {
 // --- Failure tests for CreateUser (handlers.go) ---
 
 func TestCreateUser_Fail_BadJSON(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// Send invalid JSON
 	req, err := http.NewRequest("POST", "/admin/user", bytes.NewBufferString("{invalid-json}"))
@@ -203,15 +204,15 @@ func TestCreateUser_Fail_BadJSON(t *testing.T) {
 }
 
 func TestCreateUser_Fail_PasswordsDontMatch(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	userReq := map[string]string{
-		"username":         "failuser_" + RandString(8),
+		"username":         "failuser_" + testutils.RandString(8),
 		"password":         base64.StdEncoding.EncodeToString([]byte("pw1")),
 		"confirm_password": base64.StdEncoding.EncodeToString([]byte("pw2")),
 	}
@@ -227,15 +228,15 @@ func TestCreateUser_Fail_PasswordsDontMatch(t *testing.T) {
 }
 
 func TestCreateUser_Fail_BadBase64Password(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	userReq := map[string]string{
-		"username":         "failuser_" + RandString(8),
+		"username":         "failuser_" + testutils.RandString(8),
 		"password":         "!!notbase64!!",
 		"confirm_password": "!!notbase64!!",
 	}
@@ -251,15 +252,15 @@ func TestCreateUser_Fail_BadBase64Password(t *testing.T) {
 }
 
 func TestCreateUser_Fail_DBCreateError_DuplicateUsername(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// First create a user
-	username := "dupuser_" + RandString(8)
+	username := "dupuser_" + testutils.RandString(8)
 	password := base64.StdEncoding.EncodeToString([]byte("pw1"))
 	userReq := map[string]string{
 		"username":         username,
@@ -287,15 +288,15 @@ func TestCreateUser_Fail_DBCreateError_DuplicateUsername(t *testing.T) {
 }
 
 func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	userReq := map[string]string{
-		"username":         "headeruser_" + RandString(8),
+		"username":         "headeruser_" + testutils.RandString(8),
 		"password":         base64.StdEncoding.EncodeToString([]byte("pw1")),
 		"confirm_password": base64.StdEncoding.EncodeToString([]byte("pw1")),
 	}
@@ -311,7 +312,7 @@ func TestCreateUser_SetsAccessTokenHeader(t *testing.T) {
 }
 
 func TestLogin_GenerateTokenError(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	// save original function
 	orig := utils.GenerateToken
 	defer func() { utils.GenerateToken = orig }()
@@ -348,17 +349,17 @@ func TestLogin_GenerateTokenError(t *testing.T) {
 // --- Tests for DeleteUser and FetchUser routes ---
 
 func TestDeleteUser_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// 1. Create user
-	userUsername := "deluser_" + RandString(8)
+	userUsername := "deluser_" + testutils.RandString(8)
 	userPassword := "delpass1"
 	userReq := map[string]string{
 		"username":         userUsername,
@@ -374,7 +375,7 @@ func TestDeleteUser_HappyPath(t *testing.T) {
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	setUserValidated(t, TestApp, userUsername)
+	testutils.SetUserValidated(t, TestApp, userUsername)
 
 	var user app.User
 	err = TestApp.DB.Where("username = ?", userUsername).First(&user).Error
@@ -399,12 +400,12 @@ func TestDeleteUser_HappyPath(t *testing.T) {
 }
 
 func TestDeleteUser_BadUUID(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	req, err := http.NewRequest("DELETE", "/admin/user/not-a-uuid", nil)
 	require.NoError(t, err)
@@ -416,12 +417,12 @@ func TestDeleteUser_BadUUID(t *testing.T) {
 }
 
 func TestDeleteUser_NonExistentUser(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	randomUUID := uuid.New().String()
 	req, err := http.NewRequest("DELETE", "/admin/user/"+randomUUID, nil)
@@ -434,16 +435,16 @@ func TestDeleteUser_NonExistentUser(t *testing.T) {
 }
 
 func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// 1. Create a normal user with admin role
-	adminUsername := "adminuser_" + RandString(8)
+	adminUsername := "adminuser_" + testutils.RandString(8)
 	adminPassword := "adminpass"
 	adminReq := map[string]string{
 		"username":         adminUsername,
@@ -459,7 +460,7 @@ func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	setUserValidated(t, TestApp, adminUsername)
+	testutils.SetUserValidated(t, TestApp, adminUsername)
 
 	// 2. Login as admin user (match how other tests do user logins)
 	loginReq := map[string]string{
@@ -482,7 +483,7 @@ func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
 	adminToken := out.Token
 
 	// 3. Create another normal user to be deleted
-	otherUsername := "victimuser_" + RandString(8)
+	otherUsername := "victimuser_" + testutils.RandString(8)
 	otherPassword := "victimpass"
 	otherReq := map[string]string{
 		"username":         otherUsername,
@@ -498,7 +499,7 @@ func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusCreated, w2.Code)
 
-	setUserValidated(t, TestApp, otherUsername)
+	testutils.SetUserValidated(t, TestApp, otherUsername)
 
 	var victimUser app.User
 	err = TestApp.DB.Where("username = ?", otherUsername).First(&victimUser).Error
@@ -516,16 +517,16 @@ func TestDeleteUser_AdminCannotDeleteUser(t *testing.T) {
 }
 
 func TestFetchUser_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	userUsername := "fetchuser_" + RandString(8)
+	userUsername := "fetchuser_" + testutils.RandString(8)
 	userPassword := "fetchpass1"
 	userReq := map[string]string{
 		"username":         userUsername,
@@ -541,7 +542,7 @@ func TestFetchUser_HappyPath(t *testing.T) {
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	setUserValidated(t, TestApp, userUsername)
+	testutils.SetUserValidated(t, TestApp, userUsername)
 
 	var user app.User
 	err = TestApp.DB.Where("username = ?", userUsername).First(&user).Error
@@ -558,12 +559,12 @@ func TestFetchUser_HappyPath(t *testing.T) {
 }
 
 func TestFetchUser_BadUUID(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	req, err := http.NewRequest("GET", "/admin/user/not-a-uuid", nil)
 	require.NoError(t, err)
@@ -575,12 +576,12 @@ func TestFetchUser_BadUUID(t *testing.T) {
 }
 
 func TestFetchUser_NonExistentUser(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	randomUUID := uuid.New().String()
 	req, err := http.NewRequest("GET", "/admin/user/"+randomUUID, nil)
@@ -595,16 +596,16 @@ func TestFetchUser_NonExistentUser(t *testing.T) {
 // --- AddRoleToUser and RemoveRoleFromUser Integration Tests ---
 
 func TestAddRoleToUser_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// Setup: create and validate a user (default gets "admin" role)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "roleuser_" + RandString(8)
+	username := "roleuser_" + testutils.RandString(8)
 	password := "rolepass"
 	userReq := map[string]string{
 		"username":         username,
@@ -618,7 +619,7 @@ func TestAddRoleToUser_HappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	var user app.User
 	err := TestApp.DB.Where("username = ?", username).First(&user).Error
@@ -635,8 +636,8 @@ func TestAddRoleToUser_HappyPath(t *testing.T) {
 }
 
 func TestAddRoleToUser_BadUUID(t *testing.T) {
-	resetDB(t, TestApp)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	testutils.ResetDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	req, _ := http.NewRequest("POST", "/admin/user/notauuid/aws", nil)
 	req.Header.Set("y-access-token", superToken)
@@ -647,11 +648,11 @@ func TestAddRoleToUser_BadUUID(t *testing.T) {
 }
 
 func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
-	resetDB(t, TestApp)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	testutils.ResetDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	// Create user
-	username := "missingroleuser_" + RandString(8)
+	username := "missingroleuser_" + testutils.RandString(8)
 	password := "pass"
 	userReq := map[string]string{
 		"username":         username,
@@ -665,7 +666,7 @@ func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
@@ -680,10 +681,10 @@ func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
 }
 
 func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
-	resetDB(t, TestApp)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	testutils.ResetDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
-	username := "alreadyroleuser_" + RandString(8)
+	username := "alreadyroleuser_" + testutils.RandString(8)
 	password := "pass"
 	userReq := map[string]string{
 		"username":         username,
@@ -697,7 +698,7 @@ func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
@@ -712,11 +713,11 @@ func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
 }
 
 func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// Create and validate a normal user (admin role)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
-	username := "adminroleuser_" + RandString(8)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	username := "adminroleuser_" + testutils.RandString(8)
 	password := "pass"
 	userReq := map[string]string{
 		"username":         username,
@@ -730,7 +731,7 @@ func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	// Login as the admin-role user
 	loginReq := map[string]string{
@@ -761,16 +762,16 @@ func TestAddRoleToUser_ForbiddenIfNotSuper(t *testing.T) {
 // --- RemoveRoleFromUser tests ---
 
 func TestRemoveRoleFromUser_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// Setup: create and validate a user (default gets "admin" role)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "removeuser_" + RandString(8)
+	username := "removeuser_" + testutils.RandString(8)
 	password := "removeuserpass"
 	userReq := map[string]string{
 		"username":         username,
@@ -784,7 +785,7 @@ func TestRemoveRoleFromUser_HappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	var user app.User
 	err := TestApp.DB.Where("username = ?", username).First(&user).Error
@@ -801,8 +802,8 @@ func TestRemoveRoleFromUser_HappyPath(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_BadUUID(t *testing.T) {
-	resetDB(t, TestApp)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	testutils.ResetDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
 	req, _ := http.NewRequest("DELETE", "/admin/user/notauuid/admin", nil)
 	req.Header.Set("y-access-token", superToken)
@@ -813,10 +814,10 @@ func TestRemoveRoleFromUser_BadUUID(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
-	resetDB(t, TestApp)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	testutils.ResetDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
-	username := "removenoroleuser_" + RandString(8)
+	username := "removenoroleuser_" + testutils.RandString(8)
 	password := "pass"
 	userReq := map[string]string{
 		"username":         username,
@@ -830,7 +831,7 @@ func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
@@ -851,10 +852,10 @@ func TestRemoveRoleFromUser_RoleDoesNotExist(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
-	resetDB(t, TestApp)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	testutils.ResetDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
 
-	username := "notpresentuser_" + RandString(8)
+	username := "notpresentuser_" + testutils.RandString(8)
 	password := "pass"
 	userReq := map[string]string{
 		"username":         username,
@@ -868,7 +869,7 @@ func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	var user app.User
 	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
@@ -883,11 +884,11 @@ func TestRemoveRoleFromUser_RoleNotPresentOnUser(t *testing.T) {
 }
 
 func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// Create and validate a normal user (admin role)
-	superToken := loginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
-	username := "removeadmin_" + RandString(8)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+	username := "removeadmin_" + testutils.RandString(8)
 	password := "pass"
 	userReq := map[string]string{
 		"username":         username,
@@ -901,7 +902,7 @@ func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, reqUser)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	// Login as the admin-role user
 	loginReq := map[string]string{
@@ -929,16 +930,16 @@ func TestRemoveRoleFromUser_ForbiddenIfNotSuper(t *testing.T) {
 }
 
 func TestFetchAllUsers_HappyPath_Super(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// Create additional users
 	for i := 0; i < 2; i++ {
-		username := "fetchall_" + RandString(5) + fmt.Sprint(i)
+		username := "fetchall_" + testutils.RandString(5) + fmt.Sprint(i)
 		password := "pw"
 		userReq := map[string]string{
 			"username":         username,
@@ -952,7 +953,7 @@ func TestFetchAllUsers_HappyPath_Super(t *testing.T) {
 		w := httptest.NewRecorder()
 		TestApp.Router.ServeHTTP(w, req)
 		require.Equal(t, http.StatusCreated, w.Code)
-		setUserValidated(t, TestApp, username)
+		testutils.SetUserValidated(t, TestApp, username)
 	}
 
 	req, _ := http.NewRequest("GET", "/admin/users", nil)
@@ -968,12 +969,12 @@ func TestFetchAllUsers_HappyPath_Super(t *testing.T) {
 }
 
 func TestFetchAllUsers_HappyPath_Admin(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "fetchadmin_" + RandString(5)
+	username := "fetchadmin_" + testutils.RandString(5)
 	password := "pw"
 	userReq := map[string]string{
 		"username":         username,
@@ -987,7 +988,7 @@ func TestFetchAllUsers_HappyPath_Admin(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	// Login as admin user
 	loginReq := map[string]string{
@@ -1017,12 +1018,12 @@ func TestFetchAllUsers_HappyPath_Admin(t *testing.T) {
 }
 
 func TestFetchAllUsers_Forbidden_OtherRole(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "nonprivuser_" + RandString(6)
+	username := "nonprivuser_" + testutils.RandString(6)
 	password := "pw"
 	userReq := map[string]string{
 		"username":         username,
@@ -1036,7 +1037,7 @@ func TestFetchAllUsers_Forbidden_OtherRole(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 
 	// Add "aws" role
 	var user app.User
@@ -1078,7 +1079,7 @@ func TestFetchAllUsers_Forbidden_OtherRole(t *testing.T) {
 }
 
 func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/users", nil)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
@@ -1086,13 +1087,13 @@ func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
 }
 
 func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	req, err := http.NewRequest("GET", "/admin/roles", nil)
 	require.NoError(t, err)
@@ -1113,12 +1114,12 @@ func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
 
 // Admin happy path
 func TestListAllRoles_HappyPath_Admin(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	adminUsername := "adminroles_" + RandString(6)
+	adminUsername := "adminroles_" + testutils.RandString(6)
 	adminPassword := "pw"
 	userReq := map[string]string{
 		"username":         adminUsername,
@@ -1132,7 +1133,7 @@ func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, adminUsername)
+	testutils.SetUserValidated(t, TestApp, adminUsername)
 
 	loginReq := map[string]string{
 		"username": adminUsername,
@@ -1165,12 +1166,12 @@ func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 
 // Forbidden for non-privileged user (e.g., aws role only)
 func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "awsroleuser_" + RandString(6)
+	username := "awsroleuser_" + testutils.RandString(6)
 	password := "pw"
 	userReq := map[string]string{
 		"username":         username,
@@ -1184,7 +1185,7 @@ func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 	var user app.User
 	require.NoError(t, TestApp.DB.Where("username = ?", username).First(&user).Error)
 	// Add "aws" role, remove "admin" role
@@ -1223,7 +1224,7 @@ func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 
 // Unauthorized: No token
 func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/roles", nil)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
@@ -1232,12 +1233,12 @@ func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
 
 // No roles: Access forbidden even to superuser/admin (middleware blocks)
 func TestListAllRoles_NoRoles_Forbidden(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM user_role").Error)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM roles").Error)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	req, _ := http.NewRequest("GET", "/admin/roles", nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
