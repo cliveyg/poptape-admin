@@ -103,6 +103,72 @@ func TestAddRoleToUser_RoleDoesNotExist(t *testing.T) {
 	require.Contains(t, w2.Body.String(), "Role does not exist")
 }
 
+func TestAddRoleToUser_InvalidRoleNameInRoute(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	// Create user
+	username := "badrolenameuser_" + testutils.RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	testutils.SetUserValidated(t, TestApp, username)
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+
+	// Try to add a truly non-existent role
+	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/invalid-Role", nil)
+	req2.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusBadRequest, w2.Code)
+	require.Contains(t, w2.Body.String(), "Bad request")
+}
+
+func TestAddRoleToUser_RoleNameTooLong(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
+
+	// Create user
+	username := "badrolenameuser_" + testutils.RandString(8)
+	password := "pass"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	reqUser, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	reqUser.Header.Set("y-access-token", superToken)
+	reqUser.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, reqUser)
+	require.Equal(t, http.StatusCreated, w.Code)
+	testutils.SetUserValidated(t, TestApp, username)
+
+	var user app.User
+	_ = TestApp.DB.Where("username = ?", username).First(&user).Error
+
+	// Try to add a truly non-existent role
+	req2, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aaaaabbbbbcccccdddddeeeee", nil)
+	req2.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusBadRequest, w2.Code)
+	require.Contains(t, w2.Body.String(), "Bad request")
+}
+
 func TestAddRoleToUser_RoleAlreadyPresent(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	superToken := testutils.LoginAndGetToken(t, TestApp, os.Getenv("SUPERUSER"), os.Getenv("SUPERPASS"))
