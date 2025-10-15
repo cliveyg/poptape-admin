@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -165,5 +166,5 @@ func TestBackupMongo_HappyPath(t *testing.T) {
 	fixturePath := filepath.Join(rootDir, "testutils", "fixtures", "fotos.dump")
 	fixture, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
-	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
+	require.Equal(t, sha256.Sum256(fixture), sha256.Sum256(buf.Bytes()), "SHA256 of GridFS backup does not match fixture")
 }
