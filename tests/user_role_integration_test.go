@@ -1085,6 +1085,7 @@ func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
+// Happy path: Superuser can list all roles
 func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -1106,12 +1107,12 @@ func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
 	}
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	require.NotEmpty(t, resp.Roles)
-	// All roles returned should have non-empty Name fields
 	for _, r := range resp.Roles {
 		require.NotEmpty(t, r.Name)
 	}
 }
 
+// Happy path: Admin user can list all roles
 func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -1163,6 +1164,7 @@ func TestListAllRoles_HappyPath_Admin(t *testing.T) {
 	}
 }
 
+// Forbidden: Non-privileged user (only "aws" role) cannot list roles
 func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -1220,6 +1222,7 @@ func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
 	require.Contains(t, w4.Body.String(), "Forbidden")
 }
 
+// Unauthorized: No token provided
 func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
 	resetDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/roles", nil)
@@ -1228,10 +1231,13 @@ func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
+// InternalServerError: No roles exist in the table (remove all roles and user_role entries)
 func TestListAllRoles_InternalServerError_WhenNoRoles(t *testing.T) {
 	resetDB(t, TestApp)
-	// Remove all roles
+	// Remove all role assignments and roles (respect FK constraints)
+	require.NoError(t, TestApp.DB.Exec("DELETE FROM user_role").Error)
 	require.NoError(t, TestApp.DB.Exec("DELETE FROM roles").Error)
+
 	// Use superuser
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
