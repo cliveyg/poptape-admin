@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"github.com/google/uuid"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,15 +39,11 @@ func createCredViaAPI(t *testing.T, token string) string {
 	require.Equal(t, http.StatusCreated, w.Code)
 	var out struct{ Message string }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
-	// The message is "Creds created; credId is [uuid]", so extract uuid:
-	var credId string
-	_, err := fmt.Sscanf(out.Message, "Creds created; credId is [%s]", &credId)
-	if err != nil || len(credId) < 36 {
-		// fallback: extract between [ and ]
-		start := bytes.Index([]byte(out.Message), []byte("[")) + 1
-		end := bytes.Index([]byte(out.Message), []byte("]"))
-		credId = out.Message[start:end]
-	}
+	start := strings.Index(out.Message, "[")
+	end := strings.Index(out.Message, "]")
+	require.True(t, start >= 0 && end > start)
+	credId := out.Message[start+1 : end]
+	credId = strings.TrimSpace(credId)
 	return credId
 }
 
