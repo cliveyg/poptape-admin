@@ -21,7 +21,6 @@ jobs:
       run:
         working-directory: /go/src/github.com/cliveyg/poptape-admin
     services:
-      # label used to access the service container
       pdb:
         image: postgres
         env:
@@ -29,26 +28,20 @@ jobs:
           POSTGRES_PASSWORD: "${{ secrets.POSTGRES_TESTDB_PASSWORD }}"
           POSTGRES_USER: poptape_admin_test
         ports:
-          # maps tcp port 5432 on service container to the host
           - 5432:5432
-        # set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
       mdb:
-        # dockerhub image
         image: mongo
-        # provide the login and db deets for mongo
         env:
           MONGO_INITDB_ROOT_USERNAME: poptape_admin_backups_test
           MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_TESTDB_ROOT_PASSWORD }}
           MONGO_INITDB_DATABASE: poptape_admin_backups_test
         ports:
-          # maps tcp port 27017 on service container to the host
           - 27017:27017
-        # set health checks to wait until mongo has started
         options: >-
           --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"
           --health-interval 10s
@@ -85,18 +78,12 @@ jobs:
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
-      - name: Run go test and generate test coverage file (excluding tests and testutils)
+      - name: Run go test and generate test coverage file (excluding tests and testutils from coverage report)
         run: |
           set -e
           set -o pipefail
           touch poptape_admin.log
-          # List packages except those in tests and testutils
-          packages=$(go list ./... | grep -v '/tests' | grep -v '/testutils')
-          # Prepare coverpkg by joining with commas
-          coverpkg=$(echo $packages | tr ' ' ',')
-          # Run tests and generate coverage
-          go test -v $packages -cover -coverpkg=$coverpkg -coverprofile=cover.out | tee test.out
-          # Remove cover entries from tests and testutils folders if any still present
+          go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
           grep -v '/tests/' cover.out | grep -v '/testutils/' > cover.out.filtered
           mv cover.out.filtered cover.out
         shell: bash
