@@ -445,16 +445,6 @@ func (a *App) CreateUser(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
-// TestRoute
-//-----------------------------------------------------------------------------
-
-func (a *App) TestRoute(c *gin.Context) {
-	a.Log.Debug().Msg("All valid and in TestRoute")
-	c.Header("y-access-token", c.GetString("token"))
-	c.JSON(http.StatusOK, gin.H{"message": "meeeep!"})
-}
-
-//-----------------------------------------------------------------------------
 // Login
 //-----------------------------------------------------------------------------
 
