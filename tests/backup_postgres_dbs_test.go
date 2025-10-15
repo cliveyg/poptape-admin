@@ -23,11 +23,13 @@ import (
 func TestBackupPostgres_HappyPath(t *testing.T) {
 	resetDB(t, TestApp)
 
+	// The db_name to use for the test and for MongoDB checks
+	dbName := "poptape_reviews"
+
 	// Setup MongoDB test client and drop test DB to start clean
-	mongoDBName := os.Getenv("MONGO_DBNAME")
 	mongoClient := testutils.TestMongoClient(t)
 	defer mongoClient.Disconnect(context.Background())
-	err := mongoClient.Database(mongoDBName).Drop(context.Background())
+	err := mongoClient.Database(dbName).Drop(context.Background())
 	require.NoError(t, err)
 
 	superUser := os.Getenv("SUPERUSER")
@@ -38,7 +40,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 
 	// Create reviews cred via API
 	payload := map[string]interface{}{
-		"db_name":     "poptape_reviews",
+		"db_name":     dbName,
 		"type":        "postgres",
 		"url":         "/reviews",
 		"db_username": "poptape_reviews",
@@ -86,7 +88,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	TestApp.CommandRunner = &mockCommandRunner{t: t}
 
 	// Call the backup endpoint
-	url := fmt.Sprintf("/admin/save/%s/poptape_reviews?mode=all", msID)
+	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
 	req2, _ := http.NewRequest("GET", url, nil)
 	req2.Header.Set("y-access-token", token)
 	w2 := httptest.NewRecorder()
@@ -108,14 +110,14 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	saveUUID, err := uuid.Parse(backupResp.SaveID)
 	require.NoError(t, err)
 	require.NoError(t, TestApp.DB.Where("save_id = ?", saveUUID).First(&saveRec).Error)
-	require.Equal(t, "poptape_reviews", saveRec.DBName)
+	require.Equal(t, dbName, saveRec.DBName)
 	require.Equal(t, "postgres", saveRec.Type)
 
 	// Print debug info for what we are searching for
 	fmt.Printf("Test is searching for save_id: '%v'\n", backupResp.SaveID)
 
 	// List all GridFS files and their metadata for debugging
-	files, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(context.Background(), bson.M{})
+	files, err := mongoClient.Database(dbName).Collection("fs.files").Find(context.Background(), bson.M{})
 	require.NoError(t, err)
 	fmt.Println("GridFS files and their metadata.save_id values:")
 	for files.Next(context.Background()) {
@@ -128,7 +130,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 
 	// Now try the actual filter as before
 	filter := bson.M{"metadata.save_id": backupResp.SaveID}
-	cursor, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(context.Background(), filter)
+	cursor, err := mongoClient.Database(dbName).Collection("fs.files").Find(context.Background(), filter)
 	require.NoError(t, err)
 	defer cursor.Close(context.Background())
 	require.True(t, cursor.Next(context.Background()), "No GridFS file found with metadata.save_id")
@@ -138,7 +140,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	fileID := fileDoc["_id"]
 
 	var buf bytes.Buffer
-	gfs, err := gridfs.NewBucket(mongoClient.Database(mongoDBName))
+	gfs, err := gridfs.NewBucket(mongoClient.Database(dbName))
 	require.NoError(t, err)
 	dlStream, err := gfs.OpenDownloadStream(fileID)
 	require.NoError(t, err)
