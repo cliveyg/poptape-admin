@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
+	"regexp"
 	"testing"
 	"time"
 
@@ -27,7 +27,7 @@ func createCredViaAPI(t *testing.T, token string) string {
 		"db_password": randomB64Password(),
 		"db_port":     "27017",
 		"host":        "host-" + uniq,
-		"role_name":   "admin", // seeded by resetDB
+		"role_name":   "admin",
 		"ms_name":     "ms_" + uniq,
 	}
 	body, _ := json.Marshal(payload)
@@ -39,11 +39,11 @@ func createCredViaAPI(t *testing.T, token string) string {
 	require.Equal(t, http.StatusCreated, w.Code)
 	var out struct{ Message string }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
-	start := strings.Index(out.Message, "[")
-	end := strings.Index(out.Message, "]")
-	require.True(t, start >= 0 && end > start)
-	credId := out.Message[start+1 : end]
-	credId = strings.TrimSpace(credId)
+
+	// Use a regex to extract the first UUID in the string.
+	re := regexp.MustCompile(`[a-fA-F0-9\-]{36}`)
+	credId := re.FindString(out.Message)
+	require.True(t, len(credId) == 36, "Extracted credId is not a 36-character UUID: '%s'", credId)
 	return credId
 }
 
