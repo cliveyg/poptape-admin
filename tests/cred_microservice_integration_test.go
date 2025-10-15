@@ -353,8 +353,6 @@ func TestCreateCreds_Fail_RoleBind(t *testing.T) {
 	require.Contains(t, w.Body.String(), "Bad request [3]")
 }
 
-// Helper: creates a cred via the API and returns its id (string UUID)
-
 func TestFetchCredsById_HappyPath_Super(t *testing.T) {
 	resetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -532,7 +530,6 @@ func TestFetchCredsById_NotFound(t *testing.T) {
 	require.NotEmpty(t, superPass)
 	token := loginAndGetToken(t, TestApp, superUser, superPass)
 
-	// Use a random UUID not in DB
 	randomId := uuid.New().String()
 	req, _ := http.NewRequest("GET", "/admin/creds/"+randomId, nil)
 	req.Header.Set("y-access-token", token)
