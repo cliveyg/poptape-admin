@@ -52,9 +52,10 @@ func (a *App) FetchCredsById(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
-	credId := c.Param("cId")
-	cr := Cred{}
-	res := a.DB.First(&cr, credId)
+	credId, _ := uuid.Parse(c.Param("cId"))
+
+	cr := Cred{CredId: credId}
+	res := a.DB.First(&cr)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msgf("Cred [%s] not found", cr.CredId.String())
