@@ -1,0 +1,108 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict LA1UNSO6G3m2xYxEd2bkxDZmKuu3Dqzd0ii1I3mSiUxFlf7cAA27POgCtymnmBa
+
+-- Dumped from database version 17.5
+-- Dumped by pg_dump version 17.6
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: reviews; Type: TABLE; Schema: public; Owner: poptape_reviews
+--
+
+CREATE TABLE public.reviews (
+    review_id uuid NOT NULL,
+    review character varying(2000),
+    reviewed_by uuid,
+    auction_id uuid,
+    item_id uuid,
+    seller uuid,
+    overall bigint,
+    pap_cost bigint,
+    comm bigint,
+    as_desc bigint,
+    created timestamp with time zone
+);
+
+
+ALTER TABLE public.reviews OWNER TO poptape_reviews;
+
+--
+-- Data for Name: reviews; Type: TABLE DATA; Schema: public; Owner: poptape_reviews
+--
+
+COPY public.reviews (review_id, review, reviewed_by, auction_id, item_id, seller, overall, pap_cost, comm, as_desc, created) FROM stdin;
+32a5c52e-afac-42ab-ba34-8f1c4b7940aa	Lorem ipsum blah	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	c1931a48-8ded-457f-be86-ebf5b5f8b373	93cfe002-db8b-4fd9-976c-a92673bdd4fa	9	8	8	10	2025-08-17 14:15:00.03624+00
+94ca7bb1-71cc-4e96-9a46-164b512a0fed	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	5	7	3	4	2025-08-17 17:24:00.921125+00
+84562f60-e485-4e4e-98fb-a2499ff28965	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	8	7	8	2	2025-08-17 17:54:24.281878+00
+cceaadd5-9860-4f02-8804-cde0f77e3525	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	8	7	8	2	2025-08-17 18:01:42.550624+00
+3f2ac0f6-4bd2-4d13-9586-7b6ca8fabe26	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	8	7	8	2	2025-08-17 18:05:06.395221+00
+eded7aa1-4541-4820-bb9c-a33c7a6cec14	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	8	7	8	2	2025-08-17 18:38:00.626332+00
+e0986557-ea04-4275-9694-81df49e91e62	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	8	7	8	2	2025-08-17 22:40:49.267154+00
+2e2e2155-8ce9-4352-9c93-9bb41869bd59	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.	f38ba39a-3682-4803-a498-659f0bf05304	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	8	7	8	2	2025-08-17 22:46:23.505796+00
+802c4245-815c-45e6-968b-a68df42212bf	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 	37532913-281f-4de5-bd1e-0d2d922e84df	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	93cfe002-db8b-4fd9-976c-a92673bdd4fa	4	4	4	1	2025-08-20 21:53:57.769928+00
+b2027816-50f5-4dde-bb90-2aec0d033a86	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. 	37532913-281f-4de5-bd1e-0d2d922e84df	811dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	f38ba39a-3682-4803-a498-659f0bf05304	4	4	4	1	2025-08-20 21:56:30.468379+00
+17e3b614-1103-4d55-806b-f5d71e753bbd	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis.	37532913-281f-4de5-bd1e-0d2d922e84df	a11dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	f38ba39a-3682-4803-a498-659f0bf05304	8	7	9	7	2025-08-24 11:14:31.183458+00
+0e4fb859-8405-4c77-874f-50630c09f901	Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis.	37532913-281f-4de5-bd1e-0d2d922e84df	a11dd0f8-5781-4bfd-85e8-7d3691d0f1c5	bbdfcdd2-732f-4fe4-9c35-36021c2b8200	f38ba39a-3682-4803-a498-659f0bf05304	7	5	8	8	2025-08-24 11:15:18.189122+00
+\.
+
+
+--
+-- Name: reviews reviews_pkey; Type: CONSTRAINT; Schema: public; Owner: poptape_reviews
+--
+
+ALTER TABLE ONLY public.reviews
+    ADD CONSTRAINT reviews_pkey PRIMARY KEY (review_id);
+
+
+--
+-- Name: idx_reviews_auction_id; Type: INDEX; Schema: public; Owner: poptape_reviews
+--
+
+CREATE INDEX idx_reviews_auction_id ON public.reviews USING btree (auction_id);
+
+
+--
+-- Name: idx_reviews_item_id; Type: INDEX; Schema: public; Owner: poptape_reviews
+--
+
+CREATE INDEX idx_reviews_item_id ON public.reviews USING btree (item_id);
+
+
+--
+-- Name: idx_reviews_reviewed_by; Type: INDEX; Schema: public; Owner: poptape_reviews
+--
+
+CREATE INDEX idx_reviews_reviewed_by ON public.reviews USING btree (reviewed_by);
+
+
+--
+-- Name: idx_reviews_seller; Type: INDEX; Schema: public; Owner: poptape_reviews
+--
+
+CREATE INDEX idx_reviews_seller ON public.reviews USING btree (seller);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict LA1UNSO6G3m2xYxEd2bkxDZmKuu3Dqzd0ii1I3mSiUxFlf7cAA27POgCtymnmBa
+

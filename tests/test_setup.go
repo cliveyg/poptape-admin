@@ -2,18 +2,24 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/rs/zerolog"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func setupLogger() *zerolog.Logger {
@@ -35,17 +41,15 @@ func setupLogger() *zerolog.Logger {
 	}
 
 	logger := zerolog.New(cw).With().Timestamp().Caller().Logger()
-	// set log level
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	return &logger
 }
 
-// Call this at the start of every test to get a fresh, seeded app instance.
 func setupTestApp(t *testing.T) *app.App {
 	a := &app.App{}
 	a.Log = setupLogger()
 	a.CommandRunner = &app.RealCommandRunner{}
-	a.InitialiseApp() // runs migrations and seeds roles, superuser, microservices, etc.
+	a.InitialiseApp()
 	return a
 }
 
@@ -85,7 +89,6 @@ func RandString(n int) string {
 }
 
 func resetDB(t *testing.T, a *app.App) {
-	// List all tables you want to clear.
 	tables := []string{
 		"saverecords",
 		"creds",
@@ -111,7 +114,6 @@ func resetDB(t *testing.T, a *app.App) {
 	}
 	a.Log.Debug().Msg("All tables cleared")
 
-	// reseed: roles
 	if err := a.CreateRoles(); err != nil {
 		if t != nil {
 			t.Fatalf("Failed to reseed roles: %v", err)
@@ -119,8 +121,6 @@ func resetDB(t *testing.T, a *app.App) {
 			panic(fmt.Sprintf("Failed to reseed roles: %v", err))
 		}
 	}
-
-	// reseed: superuser
 	adminId, err := a.CreateSuperUser()
 	if err != nil {
 		if t != nil {
@@ -129,8 +129,6 @@ func resetDB(t *testing.T, a *app.App) {
 			panic(fmt.Sprintf("Failed to reseed superuser: %v", err))
 		}
 	}
-
-	// reseed: microservices
 	if err = a.CreateMicroservices(*adminId); err != nil {
 		if t != nil {
 			t.Fatalf("Failed to reseed microservices: %v", err)
@@ -140,3 +138,73 @@ func resetDB(t *testing.T, a *app.App) {
 	}
 	a.Log.Debug().Msg("Everything reseeded")
 }
+
+func resetMongo(t *testing.T, mongoURI, dbName string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	if err == nil {
+		defer client.Disconnect(ctx)
+	}
+	if err != nil {
+		t.Fatalf("resetMongo: failed to connect to mongo: %v", err)
+	}
+	err = client.Database(dbName).Drop(ctx)
+	if err != nil && err != mongo.ErrNilDocument {
+		t.Fatalf("resetMongo: failed to drop db %q: %v", dbName, err)
+	}
+}
+
+// mockCommandRunner implements app.CommandRunner
+type mockCommandRunner struct {
+	t *testing.T
+}
+
+func (m *mockCommandRunner) Command(name string, args ...string) app.Cmd {
+	m.t.Helper()
+	if name != "pg_dump" {
+		m.t.Fatalf("mockCommandRunner: unexpected command %q", name)
+	}
+	return &mockCmd{t: m.t}
+}
+
+// mockCmd implements app.Cmd
+type mockCmd struct {
+	t *testing.T
+}
+
+func (c *mockCmd) Start() error                       { return nil }
+func (c *mockCmd) Run() error                         { return nil }
+func (c *mockCmd) Wait() error                        { return nil }
+func (c *mockCmd) StdoutPipe() (io.ReadCloser, error) { return c.mockFixtureReader(), nil }
+func (c *mockCmd) StderrPipe() (io.ReadCloser, error) { return c.mockEmptyReader(), nil }
+func (c *mockCmd) StdinPipe() (io.WriteCloser, error) { return &mockWriteCloser{}, nil }
+func (c *mockCmd) SetEnv(env []string)                {}
+func (c *mockCmd) SetStdout(w io.Writer)              {}
+func (c *mockCmd) SetStderr(w io.Writer)              {}
+func (c *mockCmd) SetStdin(r io.Reader)               {}
+
+func (c *mockCmd) mockFixtureReader() io.ReadCloser {
+	// Always load tests/fixtures/reviews.dump relative to this source file
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		c.t.Fatalf("mockCmd: unable to determine caller for fixture path")
+	}
+	// thisFile is .../tests/test_setup.go, so its directory is .../tests
+	testsDir := filepath.Dir(thisFile)
+	fixturePath := filepath.Join(testsDir, "fixtures", "reviews.dump")
+	data, err := os.ReadFile(fixturePath)
+	if err != nil {
+		c.t.Fatalf("mockCmd: failed to read fixture: %v", err)
+	}
+	return io.NopCloser(bytes.NewReader(data))
+}
+
+func (c *mockCmd) mockEmptyReader() io.ReadCloser {
+	return io.NopCloser(bytes.NewReader([]byte{}))
+}
+
+type mockWriteCloser struct{}
+
+func (m *mockWriteCloser) Write(p []byte) (n int, err error) { return len(p), nil }
+func (m *mockWriteCloser) Close() error                      { return nil }
