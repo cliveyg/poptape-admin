@@ -111,20 +111,35 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.Equal(t, "poptape_reviews", saveRec.DBName)
 	require.Equal(t, "postgres", saveRec.Type)
 
-	// Check file saved in MongoDB GridFS by metadata.save_id
-	gfs, err := gridfs.NewBucket(mongoClient.Database(mongoDBName))
-	require.NoError(t, err)
+	// Print debug info for what we are searching for
+	fmt.Printf("Test is searching for save_id: '%v'\n", backupResp.SaveID)
 
+	// List all GridFS files and their metadata for debugging
+	files, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(context.Background(), bson.M{})
+	require.NoError(t, err)
+	fmt.Println("GridFS files and their metadata.save_id values:")
+	for files.Next(context.Background()) {
+		var fileDoc bson.M
+		require.NoError(t, files.Decode(&fileDoc))
+		meta, _ := fileDoc["metadata"].(bson.M)
+		fmt.Printf("  _id=%v  metadata=%+v\n", fileDoc["_id"], meta)
+	}
+	require.NoError(t, files.Err())
+
+	// Now try the actual filter as before
 	filter := bson.M{"metadata.save_id": backupResp.SaveID}
 	cursor, err := mongoClient.Database(mongoDBName).Collection("fs.files").Find(context.Background(), filter)
 	require.NoError(t, err)
 	defer cursor.Close(context.Background())
 	require.True(t, cursor.Next(context.Background()), "No GridFS file found with metadata.save_id")
+
 	var fileDoc bson.M
 	require.NoError(t, cursor.Decode(&fileDoc))
 	fileID := fileDoc["_id"]
 
 	var buf bytes.Buffer
+	gfs, err := gridfs.NewBucket(mongoClient.Database(mongoDBName))
+	require.NoError(t, err)
 	dlStream, err := gfs.OpenDownloadStream(fileID)
 	require.NoError(t, err)
 	_, err = io.Copy(&buf, dlStream)
