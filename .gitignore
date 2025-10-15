@@ -26,3 +26,5 @@
 !.github/workflows/api-tests.yml
 !testutils/*
 !tests/*
+!tests/fixtures/
+!tests/fixtures/reviews.dump
