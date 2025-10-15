@@ -17,6 +17,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func getFirstRoleName(t *testing.T) string {
+	var role app.Role
+	err := TestApp.DB.Order("name asc").First(&role).Error
+	require.NoError(t, err)
+	return role.Name
+}
+
 func TestSuperuserLogin(t *testing.T) {
 	resetDB(t, TestApp)
 
@@ -1076,4 +1083,165 @@ func TestFetchAllUsers_Unauthorized_NoToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestListAllRoles_HappyPath_Superuser(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	req, err := http.NewRequest("GET", "/admin/roles", nil)
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Roles []app.Role `json:"roles"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	require.NotEmpty(t, resp.Roles)
+	for _, r := range resp.Roles {
+		require.NotEmpty(t, r.Name)
+	}
+}
+
+// Admin happy path
+func TestListAllRoles_HappyPath_Admin(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	adminUsername := "adminroles_" + RandString(6)
+	adminPassword := "pw"
+	userReq := map[string]string{
+		"username":         adminUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	req.Header.Set("y-access-token", superToken)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, adminUsername)
+
+	loginReq := map[string]string{
+		"username": adminUsername,
+		"password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+	}
+	body, _ = json.Marshal(loginReq)
+	req2, _ := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusOK, w2.Code)
+	var out struct{ Token string }
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&out))
+	adminToken := out.Token
+
+	req3, _ := http.NewRequest("GET", "/admin/roles", nil)
+	req3.Header.Set("y-access-token", adminToken)
+	w3 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w3, req3)
+	require.Equal(t, http.StatusOK, w3.Code)
+	var resp struct {
+		Roles []app.Role `json:"roles"`
+	}
+	require.NoError(t, json.NewDecoder(w3.Body).Decode(&resp))
+	require.NotEmpty(t, resp.Roles)
+	for _, r := range resp.Roles {
+		require.NotEmpty(t, r.Name)
+	}
+}
+
+// Forbidden for non-privileged user (e.g., aws role only)
+func TestListAllRoles_Forbidden_NonPrivilegedRole(t *testing.T) {
+	resetDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+
+	username := "awsroleuser_" + RandString(6)
+	password := "pw"
+	userReq := map[string]string{
+		"username":         username,
+		"password":         base64.StdEncoding.EncodeToString([]byte(password)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	req.Header.Set("y-access-token", superToken)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	setUserValidated(t, TestApp, username)
+	var user app.User
+	require.NoError(t, TestApp.DB.Where("username = ?", username).First(&user).Error)
+	// Add "aws" role, remove "admin" role
+	addRoleReq, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aws", nil)
+	addRoleReq.Header.Set("y-access-token", superToken)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, addRoleReq)
+	require.Equal(t, http.StatusCreated, w2.Code)
+	removeRoleReq, _ := http.NewRequest("DELETE", "/admin/user/"+user.AdminId.String()+"/admin", nil)
+	removeRoleReq.Header.Set("y-access-token", superToken)
+	w3 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w3, removeRoleReq)
+	require.Equal(t, http.StatusGone, w3.Code)
+	// Login as aws-only user
+	loginReq := map[string]string{
+		"username": username,
+		"password": base64.StdEncoding.EncodeToString([]byte(password)),
+	}
+	body, _ = json.Marshal(loginReq)
+	reqLogin, _ := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	reqLogin.Header.Set("Content-Type", "application/json")
+	wLogin := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wLogin, reqLogin)
+	require.Equal(t, http.StatusOK, wLogin.Code)
+	var out struct{ Token string }
+	require.NoError(t, json.NewDecoder(wLogin.Body).Decode(&out))
+	awsToken := out.Token
+
+	req4, _ := http.NewRequest("GET", "/admin/roles", nil)
+	req4.Header.Set("y-access-token", awsToken)
+	w4 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w4, req4)
+	require.Equal(t, http.StatusForbidden, w4.Code)
+	require.Contains(t, w4.Body.String(), "Forbidden")
+}
+
+// Unauthorized: No token
+func TestListAllRoles_Unauthorized_NoToken(t *testing.T) {
+	resetDB(t, TestApp)
+	req, _ := http.NewRequest("GET", "/admin/roles", nil)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// No roles: Access forbidden even to superuser/admin (middleware blocks)
+func TestListAllRoles_NoRoles_Forbidden(t *testing.T) {
+	resetDB(t, TestApp)
+	require.NoError(t, TestApp.DB.Exec("DELETE FROM user_role").Error)
+	require.NoError(t, TestApp.DB.Exec("DELETE FROM roles").Error)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	req, _ := http.NewRequest("GET", "/admin/roles", nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "Forbidden")
 }
