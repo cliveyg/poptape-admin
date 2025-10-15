@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -183,7 +185,15 @@ func (c *mockCmd) SetStderr(w io.Writer)              {}
 func (c *mockCmd) SetStdin(r io.Reader)               {}
 
 func (c *mockCmd) mockFixtureReader() io.ReadCloser {
-	data, err := os.ReadFile("tests/fixtures/reviews.dump")
+	// Always load tests/fixtures/reviews.dump relative to this source file
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		c.t.Fatalf("mockCmd: unable to determine caller for fixture path")
+	}
+	// thisFile is .../tests/test_setup.go, so its directory is .../tests
+	testsDir := filepath.Dir(thisFile)
+	fixturePath := filepath.Join(testsDir, "fixtures", "reviews.dump")
+	data, err := os.ReadFile(fixturePath)
 	if err != nil {
 		c.t.Fatalf("mockCmd: failed to read fixture: %v", err)
 	}
