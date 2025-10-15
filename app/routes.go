@@ -185,11 +185,6 @@ func (a *App) InitialiseRoutes() {
 		c.JSON(http.StatusOK, gin.H{"message": "System running...", "version": os.Getenv("VERSION")})
 	})
 
-	// test route
-	a.Router.GET("/admin/test/pgdump", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.TestRoute(c)
-	})
-
 	// all other routes
 	a.Router.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Resource not found"})
