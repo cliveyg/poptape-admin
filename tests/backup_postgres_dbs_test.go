@@ -86,8 +86,13 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	}
 	require.NotEmpty(t, msID, "could not find microservice_id for reviews")
 
-	// Mock CommandRunner for pg_dump
-	TestApp.CommandRunner = &testutils.MockCommandRunner{T: t}
+	// Mock CommandRunner for pg_dump with the correct fixture for postgres
+	TestApp.CommandRunner = &testutils.MockCommandRunner{
+		T: t,
+		Fixtures: map[string]string{
+			"pg_dump": "reviews.dump", // must be in testutils/fixtures/
+		},
+	}
 
 	// Call the backup endpoint
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
