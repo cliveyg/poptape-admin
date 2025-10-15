@@ -3,6 +3,7 @@ package testutils
 import (
 	"context"
 	"fmt"
+	"github.com/cliveyg/poptape-admin/app"
 	"os"
 	"testing"
 	"time"
@@ -33,18 +34,41 @@ func TestMongoClient(t *testing.T) *mongo.Client {
 	return client
 }
 
-func ResetMongo(t *testing.T, mongoURI, dbName string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	if err == nil {
-		defer client.Disconnect(ctx)
+func ResetMongoDB(t *testing.T, a *app.App) {
+	ctx := context.Background()
+	mongoClient := a.Mongo
+	if mongoClient == nil {
+		if t != nil {
+			t.Fatalf("TestApp.Mongo is nil, cannot reset MongoDB")
+		} else {
+			panic("TestApp.Mongo is nil, cannot reset MongoDB")
+		}
 	}
+	systemDBs := map[string]bool{
+		"admin":  true,
+		"local":  true,
+		"config": true,
+	}
+
+	dbs, err := mongoClient.ListDatabaseNames(ctx, map[string]interface{}{})
 	if err != nil {
-		t.Fatalf("resetMongo: failed to connect to mongo: %v", err)
+		if t != nil {
+			t.Fatalf("failed to list MongoDB databases: %v", err)
+		} else {
+			panic(fmt.Sprintf("failed to list MongoDB databases: %v", err))
+		}
 	}
-	err = client.Database(dbName).Drop(ctx)
-	if err != nil && err != mongo.ErrNilDocument {
-		t.Fatalf("resetMongo: failed to drop db %q: %v", dbName, err)
+
+	for _, dbName := range dbs {
+		if !systemDBs[dbName] {
+			err := mongoClient.Database(dbName).Drop(ctx)
+			if err != nil {
+				if t != nil {
+					t.Fatalf("failed to drop MongoDB database %s: %v", dbName, err)
+				} else {
+					panic(fmt.Sprintf("failed to drop MongoDB database %s: %v", dbName, err))
+				}
+			}
+		}
 	}
 }
