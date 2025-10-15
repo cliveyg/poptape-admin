@@ -155,13 +155,14 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	dlStream.Close()
 
-	// Always resolve the absolute fixture path
+	// Always resolve the fixture path from the repo root: testutils/fixtures/reviews.dump
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatalf("unable to determine caller for fixture path")
 	}
 	testsDir := filepath.Dir(thisFile)
-	fixturePath := filepath.Join(testsDir, "fixtures", "reviews.dump")
+	rootDir := filepath.Dir(testsDir)
+	fixturePath := filepath.Join(rootDir, "testutils", "fixtures", "reviews.dump")
 	fixture, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
 	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
