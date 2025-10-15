@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/joho/godotenv"
 )
 
@@ -21,14 +22,14 @@ func TestMain(m *testing.M) {
 
 	gin.SetMode(gin.ReleaseMode)
 	TestApp = &app.App{}
-	TestApp.Log = setupLogger()
+	TestApp.Log = testutils.SetupLogger()
 	TestApp.CommandRunner = &app.RealCommandRunner{}
 
 	// 1. Migrate schema
 	TestApp.InitialiseApp()
 
 	// 2. Truncate and reseed database
-	resetDB(nil, TestApp)
+	testutils.ResetDB(nil, TestApp)
 
 	code := m.Run()
 	os.Exit(code)

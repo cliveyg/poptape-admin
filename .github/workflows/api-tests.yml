@@ -78,9 +78,6 @@ jobs:
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
-      - name: List files in tests/fixtures
-        run: ls -l tests/fixtures
-
       # all tests:
       # go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
       # individual test:

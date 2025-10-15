@@ -23,7 +23,7 @@ import (
 )
 
 func TestBackupPostgres_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// The db_name to use for the test and for MongoDB checks
 	dbName := "poptape_reviews"
@@ -38,7 +38,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// Create reviews cred via API
 	payload := map[string]interface{}{
@@ -86,8 +86,13 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	}
 	require.NotEmpty(t, msID, "could not find microservice_id for reviews")
 
-	// Mock CommandRunner for pg_dump
-	TestApp.CommandRunner = &mockCommandRunner{t: t}
+	// Mock CommandRunner for pg_dump with the correct fixture for postgres
+	TestApp.CommandRunner = &testutils.MockCommandRunner{
+		T: t,
+		Fixtures: map[string]string{
+			"pg_dump": "reviews.dump", // must be in testutils/fixtures/
+		},
+	}
 
 	// Call the backup endpoint
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
@@ -150,13 +155,14 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	dlStream.Close()
 
-	// Always resolve the absolute fixture path
+	// Always resolve the fixture path from the repo root: testutils/fixtures/reviews.dump
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatalf("unable to determine caller for fixture path")
 	}
 	testsDir := filepath.Dir(thisFile)
-	fixturePath := filepath.Join(testsDir, "fixtures", "reviews.dump")
+	rootDir := filepath.Dir(testsDir)
+	fixturePath := filepath.Join(rootDir, "testutils", "fixtures", "reviews.dump")
 	fixture, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
 	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
