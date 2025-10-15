@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/cliveyg/poptape-admin/app"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"sync"
 	"testing"
+	"time"
 )
 
 func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
@@ -46,11 +48,18 @@ func SetUserValidated(t *testing.T, testApp *app.App, username string) {
 	}
 }
 
+var (
+	seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	randMu     sync.Mutex
+)
+
 func RandString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
+	randMu.Lock()
+	defer randMu.Unlock()
 	for i := range b {
-		b[i] = letters[int64(len(letters))*int64(os.Getpid()+i)%int64(len(letters))]
+		b[i] = letters[seededRand.Intn(len(letters))]
 	}
 	return string(b)
 }
