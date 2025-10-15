@@ -70,6 +70,8 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 		Microservices []struct {
 			MicroserviceId string `json:"microservice_id"`
 			MSName         string `json:"ms_name"`
+			CreatedBy      string `json:"created_by"`
+			Created        string `json:"created"`
 		} `json:"microservices"`
 	}
 	require.NoError(t, json.Unmarshal(wMS.Body.Bytes(), &msResp))
