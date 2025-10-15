@@ -40,9 +40,9 @@ func createCredViaAPI(t *testing.T, token string) string {
 	var out struct{ Message string }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
 
-	// Use a regex to extract the first UUID in the string.
 	re := regexp.MustCompile(`[a-fA-F0-9\-]{36}`)
 	credId := re.FindString(out.Message)
+	t.Logf("Extracted credId: '%s' (len=%d) from message: %q", credId, len(credId), out.Message)
 	require.True(t, len(credId) == 36, "Extracted credId is not a 36-character UUID: '%s'", credId)
 	return credId
 }
