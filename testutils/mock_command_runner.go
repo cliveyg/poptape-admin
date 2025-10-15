@@ -3,54 +3,63 @@ package testutils
 import (
 	"bytes"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+
+	"github.com/cliveyg/poptape-admin/app"
 )
 
-// Cmd interface should match your command_runner.go interface.
-type Cmd interface {
-	Start() error
-	Run() error
-	Wait() error
-	StdoutPipe() (io.ReadCloser, error)
-	StderrPipe() (io.ReadCloser, error)
-	StdinPipe() (io.WriteCloser, error)
-	SetEnv(env []string)
-	SetStdout(w io.Writer)
-	SetStderr(w io.Writer)
-	SetStdin(r io.Reader)
-}
-
-// MockCommandRunner implements CommandRunner for testing.
+// MockCommandRunner implements app.CommandRunner and supports both pg_dump and mongodump.
 type MockCommandRunner struct {
-	LastCmd  string
-	LastArgs []string
-	Stdout   string
-	Stderr   string
-	Err      error
+	T        *testing.T
+	Fixtures map[string]string // map command name to fixture filename
 }
 
-func (m *MockCommandRunner) Command(name string, args ...string) Cmd {
-	m.LastCmd = name
-	m.LastArgs = args
-	return &MockCmd{Stdout: m.Stdout, Stderr: m.Stderr, Err: m.Err}
+func (m *MockCommandRunner) Command(name string, args ...string) app.Cmd {
+	m.T.Helper()
+	fixture, ok := m.Fixtures[name]
+	if !ok {
+		m.T.Fatalf("MockCommandRunner: unexpected command %q", name)
+	}
+	return &mockCmd{T: m.T, Fixture: fixture}
 }
 
-type MockCmd struct {
-	Stdout string
-	Stderr string
-	Err    error
+type mockCmd struct {
+	T       *testing.T
+	Fixture string
 }
 
-func (m *MockCmd) Start() error { return m.Err }
-func (m *MockCmd) Run() error   { return m.Err }
-func (m *MockCmd) Wait() error  { return m.Err }
-func (m *MockCmd) StdoutPipe() (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewBufferString(m.Stdout)), nil
+func (c *mockCmd) Start() error                       { return nil }
+func (c *mockCmd) Run() error                         { return nil }
+func (c *mockCmd) Wait() error                        { return nil }
+func (c *mockCmd) StdinPipe() (io.WriteCloser, error) { return &mockWriteCloser{}, nil }
+func (c *mockCmd) StderrPipe() (io.ReadCloser, error) { return c.mockEmptyReader(), nil }
+func (c *mockCmd) SetEnv(env []string)                {}
+func (c *mockCmd) SetStdout(w io.Writer)              {}
+func (c *mockCmd) SetStderr(w io.Writer)              {}
+func (c *mockCmd) SetStdin(r io.Reader)               {}
+
+func (c *mockCmd) StdoutPipe() (io.ReadCloser, error) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		c.T.Fatalf("mockCmd: unable to determine caller for fixture path")
+	}
+	utilsDir := filepath.Dir(thisFile)
+	fixturePath := filepath.Join(utilsDir, "fixtures", c.Fixture)
+	data, err := os.ReadFile(fixturePath)
+	if err != nil {
+		c.T.Fatalf("mockCmd: failed to read fixture %s: %v", fixturePath, err)
+	}
+	return io.NopCloser(bytes.NewReader(data)), nil
 }
-func (m *MockCmd) StderrPipe() (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewBufferString(m.Stderr)), nil
+
+func (c *mockCmd) mockEmptyReader() io.ReadCloser {
+	return io.NopCloser(bytes.NewReader([]byte{}))
 }
-func (m *MockCmd) StdinPipe() (io.WriteCloser, error) { return nil, nil }
-func (m *MockCmd) SetEnv(env []string)                {}
-func (m *MockCmd) SetStdout(w io.Writer)              {}
-func (m *MockCmd) SetStderr(w io.Writer)              {}
-func (m *MockCmd) SetStdin(r io.Reader)               {}
+
+type mockWriteCloser struct{}
+
+func (m *mockWriteCloser) Write(p []byte) (n int, err error) { return len(p), nil }
+func (m *mockWriteCloser) Close() error                      { return nil }

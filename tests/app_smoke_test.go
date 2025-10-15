@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/json"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestApp_StartupSmokeTest(t *testing.T) {
-	app := setupTestApp(t) // fresh, seeded app instance for every test
+	app := testutils.SetupTestApp(t) // fresh, seeded app instance for every test
 
 	require.NotNil(t, app)
 	require.NotNil(t, app.Router)

@@ -23,7 +23,7 @@ import (
 )
 
 func TestBackupPostgres_HappyPath(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 
 	// The db_name to use for the test and for MongoDB checks
 	dbName := "poptape_reviews"
@@ -38,7 +38,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// Create reviews cred via API
 	payload := map[string]interface{}{
@@ -87,7 +87,7 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NotEmpty(t, msID, "could not find microservice_id for reviews")
 
 	// Mock CommandRunner for pg_dump
-	TestApp.CommandRunner = &mockCommandRunner{t: t}
+	TestApp.CommandRunner = &testutils.MockCommandRunner{T: t}
 
 	// Call the backup endpoint
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)

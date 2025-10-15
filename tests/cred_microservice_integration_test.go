@@ -14,11 +14,12 @@ import (
 	"time"
 
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/stretchr/testify/require"
 )
 
 func createCredViaAPI(t *testing.T, token string) string {
-	uniq := RandString(8)
+	uniq := testutils.RandString(8)
 	payload := map[string]interface{}{
 		"db_name":     "db_" + uniq,
 		"type":        "mongo",
@@ -57,7 +58,7 @@ func randomB64Password() string {
 }
 
 func uniqueCredsPayload() map[string]interface{} {
-	uniq := RandString(8)
+	uniq := testutils.RandString(8)
 	return map[string]interface{}{
 		"db_name":     "db_" + uniq,
 		"type":        "mongo",
@@ -72,12 +73,12 @@ func uniqueCredsPayload() map[string]interface{} {
 }
 
 func TestCreateCreds_HappyPath_Super(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	payload := uniqueCredsPayload()
 	body, _ := json.Marshal(payload)
@@ -95,14 +96,14 @@ func TestCreateCreds_HappyPath_Super(t *testing.T) {
 }
 
 func TestCreateCreds_HappyPath_Admin(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	adminUsername := "admincreds_" + RandString(6)
+	adminUsername := "admincreds_" + testutils.RandString(6)
 	adminPassword := "pw"
 	userReq := map[string]string{
 		"username":         adminUsername,
@@ -116,7 +117,7 @@ func TestCreateCreds_HappyPath_Admin(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, adminUsername)
+	testutils.SetUserValidated(t, TestApp, adminUsername)
 
 	loginReq := map[string]string{
 		"username": adminUsername,
@@ -144,14 +145,14 @@ func TestCreateCreds_HappyPath_Admin(t *testing.T) {
 }
 
 func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "awscreds_" + RandString(6)
+	username := "awscreds_" + testutils.RandString(6)
 	password := "pw"
 	userReq := map[string]string{
 		"username":         username,
@@ -165,7 +166,7 @@ func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 	var user app.User
 	require.NoError(t, TestApp.DB.Where("username = ?", username).First(&user).Error)
 	addRoleReq, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aws", nil)
@@ -204,7 +205,7 @@ func TestCreateCreds_Forbidden_NonPrivilegedRole(t *testing.T) {
 }
 
 func TestCreateCreds_Unauthorized_NoToken(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	payload := uniqueCredsPayload()
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
@@ -215,12 +216,12 @@ func TestCreateCreds_Unauthorized_NoToken(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_InvalidDBType(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	payload := uniqueCredsPayload()
 	payload["type"] = "sqlserver"
 	body, _ := json.Marshal(payload)
@@ -234,12 +235,12 @@ func TestCreateCreds_Fail_InvalidDBType(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_BadJSON(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewBufferString("{badjson}"))
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
@@ -250,12 +251,12 @@ func TestCreateCreds_Fail_BadJSON(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_MissingRequiredFields(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	payload := uniqueCredsPayload()
 	delete(payload, "db_password")
 	body, _ := json.Marshal(payload)
@@ -269,12 +270,12 @@ func TestCreateCreds_Fail_MissingRequiredFields(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_InvalidBase64Password(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	payload := uniqueCredsPayload()
 	payload["db_password"] = "!!!notbase64!!!"
 	body, _ := json.Marshal(payload)
@@ -288,14 +289,14 @@ func TestCreateCreds_Fail_InvalidBase64Password(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_MicroserviceBind(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	uniq := RandString(8)
+	uniq := testutils.RandString(8)
 	// Omit "ms_name" to trigger MsIn bind failure (Bad request [2])
 	payload := map[string]interface{}{
 		"db_name":     "db_" + uniq,
@@ -319,14 +320,14 @@ func TestCreateCreds_Fail_MicroserviceBind(t *testing.T) {
 }
 
 func TestCreateCreds_Fail_RoleBind(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	uniq := RandString(8)
+	uniq := testutils.RandString(8)
 	// Omit "role_name" to trigger Role bind failure (Bad request [3])
 	payload := map[string]interface{}{
 		"db_name":     "db_" + uniq,
@@ -350,12 +351,12 @@ func TestCreateCreds_Fail_RoleBind(t *testing.T) {
 }
 
 func TestFetchCredsById_HappyPath_Super(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	credId := createCredViaAPI(t, token)
 
 	url := "/admin/creds/" + credId
@@ -375,14 +376,14 @@ func TestFetchCredsById_HappyPath_Super(t *testing.T) {
 }
 
 func TestFetchCredsById_HappyPath_Admin(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	adminUsername := "adminfetch_" + RandString(6)
+	adminUsername := "adminfetch_" + testutils.RandString(6)
 	adminPassword := "pw"
 	userReq := map[string]string{
 		"username":         adminUsername,
@@ -396,7 +397,7 @@ func TestFetchCredsById_HappyPath_Admin(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, adminUsername)
+	testutils.SetUserValidated(t, TestApp, adminUsername)
 	loginReq := map[string]string{
 		"username": adminUsername,
 		"password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
@@ -429,14 +430,14 @@ func TestFetchCredsById_HappyPath_Admin(t *testing.T) {
 }
 
 func TestFetchCredsById_Forbidden_NonPrivilegedRole(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	superToken := loginAndGetToken(t, TestApp, superUser, superPass)
+	superToken := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	username := "awsfetch_" + RandString(6)
+	username := "awsfetch_" + testutils.RandString(6)
 	password := "pw"
 	userReq := map[string]string{
 		"username":         username,
@@ -450,7 +451,7 @@ func TestFetchCredsById_Forbidden_NonPrivilegedRole(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
-	setUserValidated(t, TestApp, username)
+	testutils.SetUserValidated(t, TestApp, username)
 	var user app.User
 	require.NoError(t, TestApp.DB.Where("username = ?", username).First(&user).Error)
 	addRoleReq, _ := http.NewRequest("POST", "/admin/user/"+user.AdminId.String()+"/aws", nil)
@@ -488,12 +489,12 @@ func TestFetchCredsById_Forbidden_NonPrivilegedRole(t *testing.T) {
 }
 
 func TestFetchCredsById_Unauthorized_NoToken(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 	credId := createCredViaAPI(t, token)
 	url := "/admin/creds/" + credId
 	req, _ := http.NewRequest("GET", url, nil)
@@ -503,12 +504,12 @@ func TestFetchCredsById_Unauthorized_NoToken(t *testing.T) {
 }
 
 func TestFetchCredsById_BadUUID(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	req, _ := http.NewRequest("GET", "/admin/creds/not-a-uuid", nil)
 	req.Header.Set("y-access-token", token)
@@ -519,12 +520,12 @@ func TestFetchCredsById_BadUUID(t *testing.T) {
 }
 
 func TestFetchCredsById_NotFound(t *testing.T) {
-	resetDB(t, TestApp)
+	testutils.ResetDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
-	token := loginAndGetToken(t, TestApp, superUser, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	randomId := uuid.New().String()
 	req, _ := http.NewRequest("GET", "/admin/creds/"+randomId, nil)
