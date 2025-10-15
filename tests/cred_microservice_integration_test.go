@@ -606,8 +606,8 @@ func TestListAllCreds_Forbidden_NonSuperRole(t *testing.T) {
 	adminPassword := "pw"
 	userReq := map[string]string{
 		"username":         adminUsername,
-		"password":         adminPassword, // Not base64: login will base64 it
-		"confirm_password": adminPassword,
+		"password":         base64.StdEncoding.EncodeToString([]byte(adminPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(adminPassword)),
 	}
 	body, _ := json.Marshal(userReq)
 	req, _ := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
