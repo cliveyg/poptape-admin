@@ -171,7 +171,7 @@ func TestMetadataReport_HappyPath_Super(t *testing.T) {
 	require.GreaterOrEqual(t, len(resp.SavedRecordsMetadata), 1)
 
 	meta := resp.SavedRecordsMetadata[0]
-	require.Equal(t, msID, meta.MicroserviceId)
+	require.Equal(t, msID, meta.MicroserviceId.String())
 	require.NotEmpty(t, meta.CredId)
 	require.Equal(t, roleName, meta.RoleName)
 	require.Equal(t, dbName, meta.DBName)
