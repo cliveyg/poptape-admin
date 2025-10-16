@@ -2,7 +2,9 @@ package testutils
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/google/uuid"
@@ -89,4 +91,16 @@ func DropTestMicroservicesByPrefix(t *testing.T, db *gorm.DB, msPrefix string) {
 	if res.Error != nil {
 		t.Errorf("Failed to clean up test microservices: %v", res.Error)
 	}
+}
+
+// InsertRoleCredMS inserts a RoleCredMS record for test setup.
+func InsertRoleCredMS(t *testing.T, db *gorm.DB, microserviceId, credId uuid.UUID, roleName string, createdBy uuid.UUID) {
+	rcm := app.RoleCredMS{
+		MicroserviceId: microserviceId,
+		CredId:         credId,
+		RoleName:       roleName,
+		CreatedBy:      createdBy,
+		Created:        time.Now(),
+	}
+	require.NoError(t, db.Create(&rcm).Error)
 }
