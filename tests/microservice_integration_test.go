@@ -549,3 +549,22 @@ func TestListAllSavesByMicroservice_FilterValidFalse_NoRecords(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, w.Code)
 	require.Contains(t, w.Body.String(), "No saves found")
 }
+
+func TestListAllSavesByMicroservice_InvalidMicroserviceIdParam(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Route expects :ms_id, provide an invalid UUID value
+	url := "/admin/microservice/not-a-uuid/saves"
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Microservice id is invalid")
+}
