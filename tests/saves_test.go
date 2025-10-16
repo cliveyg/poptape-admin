@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -140,4 +142,34 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 	TestApp.Router.ServeHTTP(w4, req4)
 	require.Equal(t, http.StatusForbidden, w4.Code)
 	require.Contains(t, w4.Body.String(), "Forbidden")
+}
+
+// Returns 404 Not Found when gorm.ErrRecordNotFound is returned from DB
+func TestListAllSaves_DBRecordNotFound(t *testing.T) {
+	origDB := TestApp.DB
+	TestApp.DB = &testutils.MockDB{OrderError: gorm.ErrRecordNotFound}
+	defer func() { TestApp.DB = origDB }()
+
+	req, _ := http.NewRequest("GET", "/admin/saves", nil)
+	req.Header.Set("y-access-token", "testtoken")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "No save records found")
+}
+
+// Returns 500 Internal Server Error when a non-ErrRecordNotFound DB error occurs
+func TestListAllSaves_DBGenericError(t *testing.T) {
+	origDB := TestApp.DB
+	TestApp.DB = &testutils.MockDB{OrderError: errors.New("forced db error")}
+	defer func() { TestApp.DB = origDB }()
+
+	req, _ := http.NewRequest("GET", "/admin/saves", nil)
+	req.Header.Set("y-access-token", "testtoken")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+	require.Contains(t, w.Body.String(), "Something went neee")
 }
