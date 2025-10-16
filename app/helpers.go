@@ -58,6 +58,7 @@ func (a *App) checkLoginDetails(l *Login, u *User) error {
 		a.Log.Error().Msgf("Error: [%s]", res.Error)
 		return res.Error
 	}
+	a.Log.Info().Msgf("In checkLoginDetails and user deets validated[%v] active[%v]", u.Validated, u.Active)
 	if u.Validated == false {
 		a.Log.Info().Msgf("User [%s]: not validated", u.Username)
 		return errors.New("user not validated")
