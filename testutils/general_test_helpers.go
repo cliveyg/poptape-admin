@@ -137,7 +137,6 @@ func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName
 	return resp.SaveID
 }
 
-// ExtractSavesList parses the saves list response for "no_of_saves" and "saves".
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	var resp struct {
 		NoOfSaves int              `json:"no_of_saves"`
@@ -147,9 +146,9 @@ func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	return resp.Saves, resp.NoOfSaves
 }
 
-func ExtractSavesListTotal(t *testing.T, body []byte) ([]app.SaveRecord, int) {
+func ListAllSavesExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	var resp struct {
-		NoOfSaves int              `json:"total"`
+		NoOfSaves int              `json:"total_saves"`
 		Saves     []app.SaveRecord `json:"saves"`
 	}
 	require.NoError(t, json.Unmarshal(body, &resp))
