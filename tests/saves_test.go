@@ -13,23 +13,6 @@ import (
 	"testing"
 )
 
-// func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
-func TestWibble1(t *testing.T) {
-	testutils.ResetPostgresDB(t, TestApp)
-	testutils.ResetMongoDB(t, TestApp)
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-
-	req, _ := http.NewRequest("GET", "/admin/saves", nil)
-	req.Header.Set("y-access-token", token)
-	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusNotFound, w.Code)
-	require.Contains(t, w.Body.String(), "No save records found")
-}
-
-// func TestListAllSaves_HappyPath_Super(t *testing.T) {
 func TestWibble2(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
@@ -56,7 +39,26 @@ func TestWibble2(t *testing.T) {
 	saveIDs := []string{saves[0].SaveId.String(), saves[1].SaveId.String()}
 	require.Contains(t, saveIDs, saveID1)
 	require.Contains(t, saveIDs, saveID2)
+	testutils.ResetPostgresDB(t, TestApp)
 }
+
+// func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
+func TestWibble1(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	req, _ := http.NewRequest("GET", "/admin/saves", nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "No save records found")
+}
+
+// func TestListAllSaves_HappyPath_Super(t *testing.T) {
 
 func TestListAllSaves_BadMetaValue_Returns400(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
