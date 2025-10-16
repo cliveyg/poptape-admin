@@ -20,12 +20,66 @@ type AWSAdmin struct {
 	Log *zerolog.Logger
 }
 
+type AWSAdminInterface interface {
+	TestConnection(ctx context.Context) error
+	CreateUserWithAccessKey(ctx context.Context, userName string) (*iamtypes.AccessKey, error)
+	DeleteUserCompletely(ctx context.Context, userName string) error
+	ListAllUsers(ctx context.Context) ([]iamtypes.User, error)
+	CreateBucket(ctx context.Context, bucketName string) error
+	EmptyBucket(ctx context.Context, bucketName string) error
+	DeleteBucketCompletely(ctx context.Context, bucketName string) error
+	ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error)
+}
+
 //-----------------------------------------------------------------------------
 // ListAllPoptapeStandardBuckets
 //-----------------------------------------------------------------------------
 
+//func NewAWSAdmin(ctx context.Context, logger *zerolog.Logger) (*AWSAdmin, error) {
+//	cfg, err := config.LoadDefaultConfig(ctx)
+//	if err != nil {
+//		logger.Error().Err(err).Msg("AWS config error")
+//		return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)
+//	}
+//	return &AWSAdmin{
+//		IAM: iam.NewFromConfig(cfg),
+//		S3:  s3.NewFromConfig(cfg),
+//		Log: logger,
+//	}, nil
+//}
+
+// LocalStackResolver provides a custom endpoint for AWS SDK.
+type LocalStackResolver struct {
+	Endpoint string
+}
+
+// Implements aws.EndpointResolverWithOptions for v1.39.2
+func (r LocalStackResolver) ResolveEndpoint(service, region string, options ...interface{}) (aws.Endpoint, error) {
+	if r.Endpoint != "" {
+		return aws.Endpoint{
+			URL:               r.Endpoint,
+			SigningRegion:     region,
+			HostnameImmutable: true, // For S3 compatibility
+		}, nil
+	}
+	return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+}
+
 func NewAWSAdmin(ctx context.Context, logger *zerolog.Logger) (*AWSAdmin, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
+	endpoint := os.Getenv("AWS_ENDPOINT_URL")
+	var cfg aws.Config
+	var err error
+
+	if endpoint != "" {
+		logger.Debug().Msgf("Using LocalStack AWS endpoint: %s", endpoint)
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithEndpointResolverWithOptions(LocalStackResolver{Endpoint: endpoint}),
+		)
+	} else {
+		logger.Debug().Msg("Using default AWS endpoints")
+		cfg, err = config.LoadDefaultConfig(ctx)
+	}
+
 	if err != nil {
 		logger.Error().Err(err).Msg("AWS config error")
 		return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)

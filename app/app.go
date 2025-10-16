@@ -12,7 +12,7 @@ type App struct {
 	DB            DBInterface
 	Log           *zerolog.Logger
 	Mongo         *mongo.Client
-	AWS           *awsutil.AWSAdmin
+	AWS           awsutil.AWSAdminInterface
 	CommandRunner CommandRunner
 }
 
