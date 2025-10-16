@@ -33,7 +33,7 @@ func TestListAllSaves_HappyPath_Super(t *testing.T) {
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	saves, total := testutils.ExtractSavesList(t, w.Body.Bytes())
+	saves, total := testutils.ExtractSavesListTotal(t, w.Body.Bytes())
 	require.Len(t, saves, 2)
 	require.Equal(t, 2, total)
 	saveIDs := []string{saves[0].SaveId.String(), saves[1].SaveId.String()}

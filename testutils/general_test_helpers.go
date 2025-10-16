@@ -147,6 +147,15 @@ func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	return resp.Saves, resp.NoOfSaves
 }
 
+func ExtractSavesListTotal(t *testing.T, body []byte) ([]app.SaveRecord, int) {
+	var resp struct {
+		NoOfSaves int              `json:"total"`
+		Saves     []app.SaveRecord `json:"saves"`
+	}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	return resp.Saves, resp.NoOfSaves
+}
+
 func UniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, uuid.New().String())
 }
