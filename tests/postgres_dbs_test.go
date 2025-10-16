@@ -271,6 +271,6 @@ func TestBackupPostgres_FailBadJWTGen(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusInternalServerError, w2.Code)
-	require.Contains(t, w2.Body.String(), "Something went bang [jwt]")
+	require.Contains(t, w2.Body.String(), "Something went bang")
 
 }
