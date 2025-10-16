@@ -194,14 +194,6 @@ func TestBackupPostgres_FailBadJWTGen(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
 
-	orig := utils.GenerateToken
-	defer func() { utils.GenerateToken = orig }()
-
-	// mock GenerateToken
-	utils.GenerateToken = func(username string, adminId uuid.UUID) (string, error) {
-		return "", errors.New("JWT error")
-	}
-
 	// The db_name to use for the test and for MongoDB checks
 	dbName := "poptape_reviews"
 
@@ -262,6 +254,15 @@ func TestBackupPostgres_FailBadJWTGen(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, msID, "could not find microservice_id for reviews")
+
+	// save original function
+	orig := utils.GenerateToken
+	defer func() { utils.GenerateToken = orig }()
+
+	// mock GenerateToken
+	utils.GenerateToken = func(username string, adminId uuid.UUID) (string, error) {
+		return "", errors.New("JWT error")
+	}
 
 	// Call the backup endpoint
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)

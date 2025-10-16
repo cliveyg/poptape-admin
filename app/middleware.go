@@ -92,7 +92,7 @@ func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
 		token, err := utils.GenerateToken(u.Username, u.AdminId)
 		if err != nil {
 			a.Log.Info().Msgf("Error creating JWT; Error [%s]", err.Error())
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "Something went bang [jwt]"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "Something went bang"})
 		} else {
 			c.Set("token", token)
 		}
