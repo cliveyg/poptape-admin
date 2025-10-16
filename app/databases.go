@@ -120,6 +120,15 @@ func (a *App) connectToPostgres() (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Limit pool size in test environment for test isolation
+	if os.Getenv("ENVIRONMENT") == "TEST" {
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, err
+		}
+		sqlDB.SetMaxOpenConns(1)
+		sqlDB.SetMaxIdleConns(1)
+	}
 	return db, nil
 }
 
