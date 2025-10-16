@@ -65,10 +65,7 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 
 	sqlDB, _ := a.DB.DB()
 	sqlDB.Close()
-	a.DB, err = a.ConnectToPostgres()
-	if err == nil {
-		t.Fatalf("Failed to reseed reconnect to Postgres: %v", err)
-	}
+	a.InitialisePostgres()
 	a.Log.Debug().Msg("Everything reseeded and db reconnected")
 }
 
