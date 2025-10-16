@@ -168,3 +168,22 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
 }
+
+func TestBackupPostgres_FailBadMSInURL(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Call the backup endpoint
+	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", "garbageMS", "poptape_reviews")
+	req2, _ := http.NewRequest("GET", url, nil)
+	req2.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusBadRequest, w2.Code)
+	require.Contains(t, w2.Body.String(), "Bad request [ms]")
+}
