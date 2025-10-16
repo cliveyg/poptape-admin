@@ -76,7 +76,7 @@ func RandString(n int) string {
 	return string(b)
 }
 
-func EnsureTestMicroserviceAndCred(t *testing.T, TestApp *app.App, token, dbName, msName, roleName string) string {
+func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, dbName, msName, roleName string) string {
 	payload := map[string]interface{}{
 		"db_name":     dbName,
 		"type":        "postgres",
@@ -93,13 +93,13 @@ func EnsureTestMicroserviceAndCred(t *testing.T, TestApp *app.App, token, dbName
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	appInstance.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	reqMS, _ := http.NewRequest("GET", "/admin/microservices", nil)
 	reqMS.Header.Set("y-access-token", token)
 	wMS := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(wMS, reqMS)
+	appInstance.Router.ServeHTTP(wMS, reqMS)
 	require.Equal(t, http.StatusOK, wMS.Code)
 	var msResp struct {
 		Microservices []struct {
@@ -117,10 +117,8 @@ func EnsureTestMicroserviceAndCred(t *testing.T, TestApp *app.App, token, dbName
 	return ""
 }
 
-// APICreateSaveRecord creates a save record via the API and returns the save_id
-func APICreateSaveRecord(t *testing.T, TestApp *app.App, token, msID, dbName string) string {
-	// Set up a mock CommandRunner for pg_dump
-	TestApp.CommandRunner = &MockCommandRunner{
+func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
+	appInstance.CommandRunner = &MockCommandRunner{
 		T: t,
 		Fixtures: map[string]string{
 			"pg_dump": "reviews.dump",
@@ -130,7 +128,7 @@ func APICreateSaveRecord(t *testing.T, TestApp *app.App, token, msID, dbName str
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	appInstance.Router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 	var resp struct {
 		SaveID string `json:"save_id"`
