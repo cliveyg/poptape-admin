@@ -87,6 +87,48 @@ func TestUserCRUD_HappyPath(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code, "login as new user should return 200")
 }
 
+func TestUser_NewUserLoginFailNotValidated(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// 1. Create a new user
+	userUsername := "testuser1_" + testutils.RandString(8)
+	userPassword := "testpass1"
+	userReq := map[string]string{
+		"username":         userUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(userPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, "user create should return 201")
+
+	// 2. Login as new user
+	loginReq := map[string]string{
+		"username": userUsername,
+		"password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
+	}
+	body, _ = json.Marshal(loginReq)
+	req2, err := http.NewRequest("POST", "/admin/login", bytes.NewReader(body))
+	require.NoError(t, err)
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusUnauthorized, w2.Code, "login as new user should fail as they're not validated")
+	require.Contains(t, w2.Body.String(), "Username and/or password incorrect")
+}
+
 func TestSuperuserLogin_Fail_MissingFields(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 
