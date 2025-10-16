@@ -337,6 +337,33 @@ func TestLogin_GenerateTokenError(t *testing.T) {
 	require.Equal(t, "Something went bang", resp["message"])
 }
 
+func TestLogin_ParseTokenError(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+
+	orig := utils.ParseToken
+	defer func() { utils.ParseToken = orig }()
+
+	// Mock the function
+	utils.ParseToken = func(ts string) (*utils.Claims, error) {
+		return nil, errors.New("JWT parse token error")
+	}
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS") // Already base64 encoded!
+	require.NotEmpty(t, superUser, "SUPERUSER env var must be set")
+	require.NotEmpty(t, superPass, "SUPERPASS env var must be set")
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+	fetchReq, err := http.NewRequest("GET", "/admin/user/"+uuid.NewString(), nil)
+	require.NoError(t, err)
+	fetchReq.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, fetchReq)
+	require.Equal(t, http.StatusUnauthorized, w2.Code)
+	require.Contains(t, w2.Body.String(), "Unauthorized")
+
+}
+
 // --- Tests for DeleteUser and FetchUser routes ---
 
 func TestDeleteUser_HappyPath(t *testing.T) {

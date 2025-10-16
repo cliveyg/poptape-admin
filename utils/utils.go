@@ -125,7 +125,9 @@ func generateToken(username string, adminId uuid.UUID) (string, error) {
 
 //-----------------------------------------------------------------------------
 
-func ParseToken(ts string) (*Claims, error) {
+var ParseToken = parseToken
+
+func parseToken(ts string) (*Claims, error) {
 
 	//log.Debug().Msgf("Parsing token string [%s]", ts)
 
