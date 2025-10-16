@@ -14,11 +14,12 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 	//a.MigrateModels()
 
 	tables := []string{
+		"user_role",
+		"role_cred_ms",
 		"users",
 		"roles",
 		"creds",
 		"microservices",
-		"role_cred_ms",
 		"saverecords",
 	}
 
