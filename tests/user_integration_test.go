@@ -125,7 +125,6 @@ func TestUser_NewUserLoginFailNotValidated(t *testing.T) {
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
-	TestApp.Log.Info().Msgf("Login attempt test sc[%d] body[%s]", w2.Code, w2.Body.String())
 	require.Equal(t, http.StatusUnauthorized, w2.Code, "login as new user should fail as they're not validated")
 	require.Contains(t, w2.Body.String(), "Username and/or password incorrect")
 }
