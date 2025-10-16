@@ -20,22 +20,22 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 		"roles",
 		"creds",
 		"microservices",
-		"saverecords",
+		"save_records",
 	}
 
 	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-= resetDB =-=-=-=-=-=-=-=-=-=-=-=-=-=-")
 
 	for _, table := range tables {
 		if a.DB.Migrator().HasTable(table) {
-			//stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
-			stmt := fmt.Sprintf("DELETE FROM %s;", table)
+			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			//stmt := fmt.Sprintf("DELETE FROM %s;", table)
 			if err := a.DB.Exec(stmt).Error; err != nil {
 				if t != nil {
-					//t.Fatalf("Failed to truncate table %s: %v", table, err)
-					t.Fatalf("Failed to delete from table %s: %v", table, err)
+					t.Fatalf("Failed to truncate table %s: %v", table, err)
+					//t.Fatalf("Failed to delete from table %s: %v", table, err)
 				} else {
-					//panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
-					panic(fmt.Sprintf("Failed to delete from table %s: %v", table, err))
+					panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
+					//panic(fmt.Sprintf("Failed to delete from table %s: %v", table, err))
 				}
 			}
 		}
