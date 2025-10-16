@@ -64,6 +64,8 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 	}
 
 	sqlDB, _ := a.DB.DB()
+	sqlDB.SetMaxIdleConns(0)
+	sqlDB.SetMaxOpenConns(0)
 	sqlDB.Close()
 	a.InitialisePostgres()
 	a.Log.Debug().Msg("Everything reseeded and db reconnected")
