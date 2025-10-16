@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/testutils"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"net/http"
@@ -144,47 +145,43 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 	require.Contains(t, w4.Body.String(), "Forbidden")
 }
 
-func TestListAllSaves_DBRecordNotFound(t *testing.T) {
-	origDB := TestApp.DB
-	defer func() { TestApp.DB = origDB }()
-
-	// Get a valid token using real login
-	testutils.ResetPostgresDB(t, TestApp)
-	testutils.ResetMongoDB(t, TestApp)
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-
-	// Swap in the mock DB with ErrRecordNotFound
-	TestApp.DB = &testutils.MockDB{OrderError: gorm.ErrRecordNotFound}
-
-	req, _ := http.NewRequest("GET", "/admin/saves", nil)
-	req.Header.Set("y-access-token", token)
+func TestListAllSaves_DBRecordNotFound_HandlerUnit(t *testing.T) {
+	// Set up Gin context and response recorder
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	c, _ := gin.CreateTestContext(w)
+
+	// Add any query params or headers needed for the handler
+	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
+
+	// If your handler expects the user in context, add it here
+	// For example: c.Set("user", app.User{...})
+
+	// Create an App with the mock DB
+	mockApp := *TestApp // shallow copy is fine
+	mockApp.DB = &testutils.MockDB{OrderError: gorm.ErrRecordNotFound}
+
+	// Call the handler directly
+	mockApp.ListAllSaves(c)
 
 	require.Equal(t, http.StatusNotFound, w.Code)
 	require.Contains(t, w.Body.String(), "No save records found")
 }
 
-func TestListAllSaves_DBGenericError(t *testing.T) {
-	origDB := TestApp.DB
-	defer func() { TestApp.DB = origDB }()
-
-	// Get a valid token using real login
-	testutils.ResetPostgresDB(t, TestApp)
-	testutils.ResetMongoDB(t, TestApp)
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-
-	// Swap in the mock DB with a generic error
-	TestApp.DB = &testutils.MockDB{OrderError: errors.New("forced db error")}
-
-	req, _ := http.NewRequest("GET", "/admin/saves", nil)
-	req.Header.Set("y-access-token", token)
+func TestListAllSaves_DBGenericError_HandlerUnit(t *testing.T) {
+	// Set up Gin context and response recorder
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
+
+	// If your handler expects the user in context, add it here
+	// For example: c.Set("user", app.User{...})
+
+	mockApp := *TestApp
+	mockApp.DB = &testutils.MockDB{OrderError: errors.New("forced db error")}
+
+	// Call the handler directly
+	mockApp.ListAllSaves(c)
 
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	require.Contains(t, w.Body.String(), "Something went neee")
