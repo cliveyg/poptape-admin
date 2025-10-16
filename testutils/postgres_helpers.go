@@ -14,11 +14,11 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 	//a.MigrateModels()
 
 	tables := []string{
-		"creds",
-		"role_cred_ms",
 		"users",
 		"roles",
+		"creds",
 		"microservices",
+		"role_cred_ms",
 		"saverecords",
 	}
 
@@ -26,12 +26,15 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 
 	for _, table := range tables {
 		if a.DB.Migrator().HasTable(table) {
-			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			//stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			stmt := fmt.Sprintf("DELETE FROM %s;", table)
 			if err := a.DB.Exec(stmt).Error; err != nil {
 				if t != nil {
-					t.Fatalf("Failed to truncate table %s: %v", table, err)
+					//t.Fatalf("Failed to truncate table %s: %v", table, err)
+					t.Fatalf("Failed to delete from table %s: %v", table, err)
 				} else {
-					panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
+					//panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
+					panic(fmt.Sprintf("Failed to delete from table %s: %v", table, err))
 				}
 			}
 		}
