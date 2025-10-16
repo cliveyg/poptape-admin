@@ -6,20 +6,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// ChainableMockDB implements DBInterface and supports common GORM chainable query patterns for handler unit tests.
+// ChainableMockDB implements DBInterface for unit tests with chainable GORM API
 type ChainableMockDB struct {
-	// Set to the error you want Find to return.
-	FindError error
-	// Set to the error you want Order to return (if you want to simulate error at Order). Most use FindError for handler tests.
+	FindError  error
 	OrderError error
 }
 
-// --- Chainable methods: return self for chaining ---
+// Chainable methods: return *gorm.DB with Statement set to avoid panics on further chaining
 func (m *ChainableMockDB) Order(value interface{}) *gorm.DB {
+	db := &gorm.DB{Statement: &gorm.Statement{DB: &gorm.DB{}}}
 	if m.OrderError != nil {
-		return &gorm.DB{Error: m.OrderError}
+		db.Error = m.OrderError
 	}
-	return &gorm.DB{Statement: &gorm.Statement{DB: &gorm.DB{}}}
+	return db
 }
 func (m *ChainableMockDB) Where(query interface{}, args ...interface{}) *gorm.DB {
 	return &gorm.DB{Statement: &gorm.Statement{DB: &gorm.DB{}}}
@@ -46,7 +45,7 @@ func (m *ChainableMockDB) Preload(query string, args ...interface{}) *gorm.DB {
 	return &gorm.DB{Statement: &gorm.Statement{DB: &gorm.DB{}}}
 }
 
-// --- Terminal methods: return *gorm.DB with error for handler logic ---
+// Terminal methods: return *gorm.DB with error for handler logic
 func (m *ChainableMockDB) Find(dest interface{}, conds ...interface{}) *gorm.DB {
 	return &gorm.DB{Error: m.FindError, Statement: &gorm.Statement{DB: &gorm.DB{}}}
 }
@@ -54,8 +53,7 @@ func (m *ChainableMockDB) First(dest interface{}, conds ...interface{}) *gorm.DB
 	return &gorm.DB{Error: m.FindError, Statement: &gorm.Statement{DB: &gorm.DB{}}}
 }
 
-// --- All other DBInterface methods: implement as needed for your tests, panic if called by mistake ---
-
+// --- All other DBInterface methods, panic if called by mistake ---
 func (m *ChainableMockDB) Create(value interface{}) *gorm.DB { panic("not implemented") }
 func (m *ChainableMockDB) Delete(value interface{}, conds ...interface{}) *gorm.DB {
 	panic("not implemented")

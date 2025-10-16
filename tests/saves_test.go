@@ -146,17 +146,11 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 }
 
 func TestListAllSaves_DBRecordNotFound_HandlerUnit(t *testing.T) {
-	// Create Gin context and recorder
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
 
-	// Adapter to satisfy app.DBInterface using testutils.ChainableMockDB
-	type dbAdapter struct{ *testutils.ChainableMockDB }
-	// Implement methods for app.DBInterface that are used by the handler
-	// (already matches signature, can embed)
-
-	mockDB := &dbAdapter{&testutils.ChainableMockDB{FindError: gorm.ErrRecordNotFound}}
+	mockDB := &testutils.ChainableMockDB{FindError: gorm.ErrRecordNotFound}
 	mockApp := *TestApp
 	mockApp.DB = mockDB
 
@@ -171,9 +165,7 @@ func TestListAllSaves_DBGenericError_HandlerUnit(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
 
-	type dbAdapter struct{ *testutils.ChainableMockDB }
-
-	mockDB := &dbAdapter{&testutils.ChainableMockDB{FindError: errors.New("forced db error")}}
+	mockDB := &testutils.ChainableMockDB{FindError: errors.New("forced db error")}
 	mockApp := *TestApp
 	mockApp.DB = mockDB
 
