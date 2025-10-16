@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func TestWibble2(t *testing.T) {
+func TestListAllSaves_HappyPath_Super(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -42,8 +42,7 @@ func TestWibble2(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 }
 
-// func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
-func TestWibble1(t *testing.T) {
+func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -57,8 +56,6 @@ func TestWibble1(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, w.Code)
 	require.Contains(t, w.Body.String(), "No save records found")
 }
-
-// func TestListAllSaves_HappyPath_Super(t *testing.T) {
 
 func TestListAllSaves_BadMetaValue_Returns400(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
