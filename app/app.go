@@ -5,12 +5,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/mongo"
-	"gorm.io/gorm"
 )
 
 type App struct {
 	Router        *gin.Engine
-	DB            *gorm.DB
+	DB            DBInterface
 	Log           *zerolog.Logger
 	Mongo         *mongo.Client
 	AWS           *awsutil.AWSAdmin

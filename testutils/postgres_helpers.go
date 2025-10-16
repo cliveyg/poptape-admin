@@ -65,7 +65,7 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 	a.Log.Debug().Msg("Everything reseeded")
 }
 
-func GetAnyAdminId(t *testing.T, db *gorm.DB) uuid.UUID {
+func GetAnyAdminId(t *testing.T, db app.DBInterface) uuid.UUID {
 	var user app.User
 	res := db.First(&user)
 	if res.Error != nil {
@@ -74,7 +74,7 @@ func GetAnyAdminId(t *testing.T, db *gorm.DB) uuid.UUID {
 	return user.AdminId
 }
 
-func CreateTestMicroservice(t *testing.T, db *gorm.DB, msName string) {
+func CreateTestMicroservice(t *testing.T, db app.DBInterface, msName string) {
 	createdBy := GetAnyAdminId(t, db)
 	ms := app.Microservice{
 		MSName:    msName,
@@ -86,7 +86,7 @@ func CreateTestMicroservice(t *testing.T, db *gorm.DB, msName string) {
 	}
 }
 
-func DropTestMicroservicesByPrefix(t *testing.T, db *gorm.DB, msPrefix string) {
+func DropTestMicroservicesByPrefix(t *testing.T, db app.DBInterface, msPrefix string) {
 	res := db.Where("ms_name LIKE ?", msPrefix+"%").Delete(&app.Microservice{})
 	if res.Error != nil {
 		t.Errorf("Failed to clean up test microservices: %v", res.Error)
@@ -94,7 +94,7 @@ func DropTestMicroservicesByPrefix(t *testing.T, db *gorm.DB, msPrefix string) {
 }
 
 // InsertRoleCredMS inserts a unique RoleCredMS record for test setup.
-func InsertRoleCredMS(t *testing.T, db *gorm.DB, microserviceId, credId uuid.UUID, roleName string, createdBy uuid.UUID) {
+func InsertRoleCredMS(t *testing.T, db app.DBInterface, microserviceId, credId uuid.UUID, roleName string, createdBy uuid.UUID) {
 	// Guarantee uniqueness for the role_cred_ms composite key (microserviceId, credId, roleName)
 	rcm := app.RoleCredMS{
 		MicroserviceId: microserviceId,
@@ -115,7 +115,7 @@ func InsertRoleCredMS(t *testing.T, db *gorm.DB, microserviceId, credId uuid.UUI
 }
 
 // InsertSaveRecord inserts a unique SaveRecord into the DB for direct test setup.
-func InsertSaveRecord(t *testing.T, db *gorm.DB, rec app.SaveRecord) {
+func InsertSaveRecord(t *testing.T, db app.DBInterface, rec app.SaveRecord) {
 	// Guarantee uniqueness for SaveRecord (assume SaveId is unique)
 	if rec.SaveId == uuid.Nil {
 		rec.SaveId = uuid.New()
