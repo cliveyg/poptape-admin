@@ -83,11 +83,13 @@ func (a *App) InitialisePostgres() {
 	timeout := 60 * time.Second
 	start := time.Now()
 	var err error
+	var gormDB *gorm.DB
 	x := 1
 	for time.Since(start) < timeout {
 		a.Log.Debug().Msgf("Trying to connect to db...[%d]", x)
-		a.DB, err = a.ConnectToPostgres()
+		gormDB, err = a.ConnectToPostgres()
 		if err == nil {
+			a.DB = &GormDB{db: gormDB}
 			break
 		}
 		a.Log.Error().Err(err)
@@ -116,31 +118,11 @@ func (a *App) ConnectToPostgres() (*gorm.DB, error) {
 		os.Getenv("POSTGRES_HOST"),
 		os.Getenv("POSTGRES_PORT"),
 	)
-	//db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-	//	Logger: logger.New(
-	//		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
-	//		logger.Config{
-	//			SlowThreshold: time.Second, // Slow SQL threshold
-	//			LogLevel:      logger.Info, // Log level (Info shows all SQL)
-	//			Colorful:      true,        // Enable color
-	//		},
-	//	),
-	//})
+
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
-	// Limit pool size in test environment for test isolation
-	//a.Log.Info().Msgf("ENVIRONMENT IS [%s]", os.Getenv("ENVIRONMENT"))
-	//if os.Getenv("ENVIRONMENT") == "TEST" {
-	//	sqlDB, err := db.DB()
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	sqlDB.SetMaxOpenConns(1)
-	//	sqlDB.SetMaxIdleConns(1)
-	//	a.Log.Info().Msgf("SetMaxOpenConns: %v", sqlDB.Stats().MaxOpenConnections)
-	//}
 	return db, nil
 }
 
@@ -152,7 +134,7 @@ func (a *App) MigrateModels() {
 
 	a.Log.Debug().Msg("Migrating models")
 
-	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{}, &User{})
+	err := a.DB.Migrator().AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{}, &User{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
