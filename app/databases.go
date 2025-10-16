@@ -86,7 +86,7 @@ func (a *App) InitialisePostgres() {
 	x := 1
 	for time.Since(start) < timeout {
 		a.Log.Debug().Msgf("Trying to connect to db...[%d]", x)
-		a.DB, err = a.connectToPostgres()
+		a.DB, err = a.ConnectToPostgres()
 		if err == nil {
 			break
 		}
@@ -107,7 +107,7 @@ func (a *App) InitialisePostgres() {
 // connectToPostgres
 //-----------------------------------------------------------------------------
 
-func (a *App) connectToPostgres() (*gorm.DB, error) {
+func (a *App) ConnectToPostgres() (*gorm.DB, error) {
 
 	dsn := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		os.Getenv("POSTGRES_USERNAME"),
@@ -116,19 +116,31 @@ func (a *App) connectToPostgres() (*gorm.DB, error) {
 		os.Getenv("POSTGRES_HOST"),
 		os.Getenv("POSTGRES_PORT"),
 	)
+	//db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	//	Logger: logger.New(
+	//		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+	//		logger.Config{
+	//			SlowThreshold: time.Second, // Slow SQL threshold
+	//			LogLevel:      logger.Info, // Log level (Info shows all SQL)
+	//			Colorful:      true,        // Enable color
+	//		},
+	//	),
+	//})
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 	// Limit pool size in test environment for test isolation
-	if os.Getenv("ENVIRONMENT") == "TEST" {
-		sqlDB, err := db.DB()
-		if err != nil {
-			return nil, err
-		}
-		sqlDB.SetMaxOpenConns(1)
-		sqlDB.SetMaxIdleConns(1)
-	}
+	//a.Log.Info().Msgf("ENVIRONMENT IS [%s]", os.Getenv("ENVIRONMENT"))
+	//if os.Getenv("ENVIRONMENT") == "TEST" {
+	//	sqlDB, err := db.DB()
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	sqlDB.SetMaxOpenConns(1)
+	//	sqlDB.SetMaxIdleConns(1)
+	//	a.Log.Info().Msgf("SetMaxOpenConns: %v", sqlDB.Stats().MaxOpenConnections)
+	//}
 	return db, nil
 }
 
@@ -139,15 +151,16 @@ func (a *App) connectToPostgres() (*gorm.DB, error) {
 func (a *App) MigrateModels() {
 
 	a.Log.Debug().Msg("Migrating models")
-	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{})
+
+	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{}, &User{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
 	// we have to migrate user separately due to dependencies on other models
-	err = a.DB.AutoMigrate(&User{})
-	if err != nil {
-		a.Log.Fatal().Msg(err.Error())
-	}
+	//err = a.DB.AutoMigrate(&User{})
+	//if err != nil {
+	//	a.Log.Fatal().Msg(err.Error())
+	//}
 	a.Log.Debug().Msg("Models migrated successfully ✓")
 }
 
@@ -393,7 +406,7 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		return err
 	}
 
-	if err := cmd.Wait(); err != nil {
+	if err = cmd.Wait(); err != nil {
 		a.Log.Info().Msgf("pg_dump cmd.Wait error [%s]", err.Error())
 		return err
 	}
@@ -414,7 +427,7 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		Type:           creds.Type,
 		Size:           *n,
 	}
-	if err := a.SaveWithAutoVersion(&sr); err != nil {
+	if err = a.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}

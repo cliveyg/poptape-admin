@@ -10,13 +10,15 @@ import (
 )
 
 func ResetPostgresDB(t *testing.T, a *app.App) {
+
 	tables := []string{
-		"saverecords",
-		"creds",
+		"user_role",
 		"role_cred_ms",
 		"users",
 		"roles",
+		"creds",
 		"microservices",
+		"save_records",
 	}
 
 	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-= resetDB =-=-=-=-=-=-=-=-=-=-=-=-=-=-")
@@ -31,11 +33,6 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 					panic(fmt.Sprintf("Failed to truncate table %s: %v", table, err))
 				}
 			}
-		}
-		if table == "saverecords" {
-			var count int64
-			a.DB.Table(table).Count(&count)
-			a.Log.Info().Msgf("DEBUG: Rows left in %s after truncate: %d", table, count)
 		}
 	}
 	a.Log.Debug().Msg("All tables cleared")
@@ -62,6 +59,7 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 			panic(fmt.Sprintf("Failed to reseed microservices: %v", err))
 		}
 	}
+
 	a.Log.Debug().Msg("Everything reseeded")
 }
 

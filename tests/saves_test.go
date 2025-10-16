@@ -15,52 +15,51 @@ import (
 
 func TestListAllSaves_HappyPath_Super(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	rec1 := testutils.NewTestSaveRecord()
-	rec2 := testutils.NewTestSaveRecord()
-	testutils.InsertSaveRecord(t, TestApp, rec1)
-	testutils.InsertSaveRecord(t, TestApp, rec2)
+	dbName := "poptape_reviews"
+	msName := "reviews"
+	roleName := "reviews"
+
+	msID := testutils.EnsureTestMicroserviceAndCred(t, TestApp, token, dbName, msName, roleName)
+	saveID1 := testutils.APICreateSaveRecord(t, TestApp, token, msID, dbName)
+	saveID2 := testutils.APICreateSaveRecord(t, TestApp, token, msID, dbName)
 
 	req, _ := http.NewRequest("GET", "/admin/saves", nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
-
 	require.Equal(t, http.StatusOK, w.Code)
 	saves, total := testutils.ExtractSavesList(t, w.Body.Bytes())
 	require.Len(t, saves, 2)
 	require.Equal(t, 2, total)
 	saveIDs := []string{saves[0].SaveId.String(), saves[1].SaveId.String()}
-	require.Contains(t, saveIDs, rec1.SaveId.String())
-	require.Contains(t, saveIDs, rec2.SaveId.String())
+	require.Contains(t, saveIDs, saveID1)
+	require.Contains(t, saveIDs, saveID2)
+	testutils.ResetPostgresDB(t, TestApp)
 }
 
 func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-
-	// Debug: print all records in saverecords table
-	var saves []app.SaveRecord
-	err := TestApp.DB.Find(&saves).Error
-	require.NoError(t, err)
-	t.Logf("DEBUG: SaveRecords in DB before API call: %v", saves)
 
 	req, _ := http.NewRequest("GET", "/admin/saves", nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
-
 	require.Equal(t, http.StatusNotFound, w.Code)
 	require.Contains(t, w.Body.String(), "No save records found")
 }
 
 func TestListAllSaves_BadMetaValue_Returns400(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
@@ -69,13 +68,13 @@ func TestListAllSaves_BadMetaValue_Returns400(t *testing.T) {
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
-
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	require.Contains(t, w.Body.String(), "Invalid meta value")
 }
 
 func TestListAllSaves_Unauthorized_NoToken(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
 	req, _ := http.NewRequest("GET", "/admin/saves", nil)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)

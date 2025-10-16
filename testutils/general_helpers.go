@@ -2,9 +2,10 @@ package testutils
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"net/http"
@@ -50,33 +51,6 @@ func SetUserValidated(t *testing.T, testApp *app.App, username string) {
 	}
 }
 
-func InsertSaveRecord(t *testing.T, testApp *app.App, rec app.SaveRecord) {
-	require.NotNil(t, testApp)
-	require.NotNil(t, testApp.DB)
-	require.NoError(t, testApp.DB.Create(&rec).Error)
-}
-
-func NewTestSaveRecord() app.SaveRecord {
-	now := time.Now().UTC()
-	return app.SaveRecord{
-		SaveId:         uuid.New(),
-		MicroserviceId: uuid.New(),
-		CredId:         uuid.New(),
-		DBName:         "db_" + uuid.NewString()[:8],
-		Table:          "sometable",
-		SavedBy:        "superuser",
-		Version:        1,
-		Dataset:        0,
-		Mode:           "all",
-		Valid:          true,
-		Type:           "mongo",
-		Size:           1234,
-		Notes:          "test note",
-		Created:        now,
-		Updated:        now,
-	}
-}
-
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	var resp struct {
 		TotalSaves int              `json:"total_saves"`
@@ -100,4 +74,66 @@ func RandString(n int) string {
 		b[i] = letters[seededRand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, dbName, msName, roleName string) string {
+	payload := map[string]interface{}{
+		"db_name":     dbName,
+		"type":        "postgres",
+		"url":         "/" + msName,
+		"db_username": dbName,
+		"db_password": base64.StdEncoding.EncodeToString([]byte("password")),
+		"db_port":     "5432",
+		"host":        "localhost",
+		"role_name":   roleName,
+		"ms_name":     msName,
+	}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	appInstance.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	reqMS, _ := http.NewRequest("GET", "/admin/microservices", nil)
+	reqMS.Header.Set("y-access-token", token)
+	wMS := httptest.NewRecorder()
+	appInstance.Router.ServeHTTP(wMS, reqMS)
+	require.Equal(t, http.StatusOK, wMS.Code)
+	var msResp struct {
+		Microservices []struct {
+			MicroserviceId string `json:"microservice_id"`
+			MSName         string `json:"ms_name"`
+		} `json:"microservices"`
+	}
+	require.NoError(t, json.Unmarshal(wMS.Body.Bytes(), &msResp))
+	for _, ms := range msResp.Microservices {
+		if ms.MSName == msName {
+			return ms.MicroserviceId
+		}
+	}
+	t.Fatalf("could not find microservice_id for %s", msName)
+	return ""
+}
+
+func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
+	appInstance.CommandRunner = &MockCommandRunner{
+		T: t,
+		Fixtures: map[string]string{
+			"pg_dump": "reviews.dump",
+		},
+	}
+	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	appInstance.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	var resp struct {
+		SaveID string `json:"save_id"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.SaveID)
+	return resp.SaveID
 }
