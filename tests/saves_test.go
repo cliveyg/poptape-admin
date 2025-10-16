@@ -150,7 +150,7 @@ func TestListAllSaves_DBRecordNotFound_HandlerUnit(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
 
-	mockDB := &testutils.ChainableMockDB{FindError: gorm.ErrRecordNotFound}
+	mockDB := &testutils.GormDBMock{Error: gorm.ErrRecordNotFound}
 	mockApp := *TestApp
 	mockApp.DB = mockDB
 
@@ -165,7 +165,7 @@ func TestListAllSaves_DBGenericError_HandlerUnit(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
 
-	mockDB := &testutils.ChainableMockDB{FindError: errors.New("forced db error")}
+	mockDB := &testutils.GormDBMock{Error: errors.New("forced db error")}
 	mockApp := *TestApp
 	mockApp.DB = mockDB
 
