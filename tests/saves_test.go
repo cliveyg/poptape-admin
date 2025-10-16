@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/stretchr/testify/require"
@@ -144,14 +143,22 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 	require.Contains(t, w4.Body.String(), "Forbidden")
 }
 
-// Returns 404 Not Found when gorm.ErrRecordNotFound is returned from DB
 func TestListAllSaves_DBRecordNotFound(t *testing.T) {
 	origDB := TestApp.DB
-	TestApp.DB = &testutils.MockDB{OrderError: gorm.ErrRecordNotFound}
 	defer func() { TestApp.DB = origDB }()
 
+	// Get a valid token using real login
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Swap in the mock DB with ErrRecordNotFound
+	TestApp.DB = &testutils.MockDB{OrderError: gorm.ErrRecordNotFound}
+
 	req, _ := http.NewRequest("GET", "/admin/saves", nil)
-	req.Header.Set("y-access-token", "testtoken")
+	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 
@@ -159,14 +166,22 @@ func TestListAllSaves_DBRecordNotFound(t *testing.T) {
 	require.Contains(t, w.Body.String(), "No save records found")
 }
 
-// Returns 500 Internal Server Error when a non-ErrRecordNotFound DB error occurs
 func TestListAllSaves_DBGenericError(t *testing.T) {
 	origDB := TestApp.DB
-	TestApp.DB = &testutils.MockDB{OrderError: errors.New("forced db error")}
 	defer func() { TestApp.DB = origDB }()
 
+	// Get a valid token using real login
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Swap in the mock DB with a generic error
+	TestApp.DB = &testutils.MockDB{OrderError: errors.New("forced db error")}
+
 	req, _ := http.NewRequest("GET", "/admin/saves", nil)
-	req.Header.Set("y-access-token", "testtoken")
+	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 
