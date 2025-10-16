@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"net/http"
@@ -144,4 +145,8 @@ func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	}
 	require.NoError(t, json.Unmarshal(body, &resp))
 	return resp.Saves, resp.NoOfSaves
+}
+
+func UniqueName(prefix string) string {
+	return fmt.Sprintf("%s_%s", prefix, uuid.New().String())
 }

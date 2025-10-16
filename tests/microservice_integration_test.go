@@ -17,31 +17,29 @@ import (
 func TestListAllSavesByMicroservice_NoRecords(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testmsdb"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, testutils.UniqueName("admin"), ms.CreatedBy)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -53,34 +51,32 @@ func TestListAllSavesByMicroservice_NoRecords(t *testing.T) {
 func TestListAllSavesByMicroservice_OneRecordForMS(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms2"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testms2db"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
-
+	roleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
 	saveID := uuid.New()
 	now := time.Now()
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         saveID,
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "db_" + msID.String(),
-		Table:          "testtable",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         cred.DBName,
+		Table:          testutils.UniqueName("testtable"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        1,
 		Dataset:        1,
 		Mode:           "full",
@@ -97,7 +93,7 @@ func TestListAllSavesByMicroservice_OneRecordForMS(t *testing.T) {
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -106,61 +102,56 @@ func TestListAllSavesByMicroservice_OneRecordForMS(t *testing.T) {
 	saves, noOfSaves := testutils.ExtractSavesList(t, w.Body.Bytes())
 	require.Equal(t, 1, noOfSaves)
 	require.Equal(t, saveID, saves[0].SaveId)
-	require.Equal(t, msID, saves[0].MicroserviceId)
+	require.Equal(t, ms.MicroserviceId, saves[0].MicroserviceId)
 }
 
 func TestListAllSavesByMicroservice_OneForOtherMS_OneForTarget(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("targetms"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
-	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
-	}
-	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
-
-	otherID := uuid.New()
-	otherCredID := uuid.New()
-	otherAdminID := uuid.New()
 	otherMS := app.Microservice{
-		MicroserviceId: otherID,
-		MSName:         "other_ms_" + otherID.String(),
-		CreatedBy:      otherAdminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("otherms"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&otherMS).Error)
+	cred := app.Cred{
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("targetmsdb"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
+	}
+	require.NoError(t, TestApp.DB.Create(&cred).Error)
 	otherCred := app.Cred{
-		CredId:  otherCredID,
-		DBName:  "db_" + otherID.String(),
-		URL:     "url_" + otherID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("othermsdb"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&otherCred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, otherID, otherCredID, "admin", otherAdminID)
-
+	roleName := testutils.UniqueName("admin")
+	otherRoleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
+	testutils.InsertRoleCredMS(t, TestApp.DB, otherMS.MicroserviceId, otherCred.CredId, otherRoleName, otherMS.CreatedBy)
 	saveID := uuid.New()
 	otherSaveID := uuid.New()
 	now := time.Now()
-
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         otherSaveID,
-		MicroserviceId: otherID,
-		CredId:         otherCredID,
-		DBName:         "db_" + otherID.String(),
-		Table:          "othertable",
-		SavedBy:        "tester",
+		MicroserviceId: otherMS.MicroserviceId,
+		CredId:         otherCred.CredId,
+		DBName:         otherCred.DBName,
+		Table:          testutils.UniqueName("othertable"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        1,
 		Dataset:        1,
 		Mode:           "full",
@@ -173,11 +164,11 @@ func TestListAllSavesByMicroservice_OneForOtherMS_OneForTarget(t *testing.T) {
 	})
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         saveID,
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "db_" + msID.String(),
-		Table:          "testtable",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         cred.DBName,
+		Table:          testutils.UniqueName("testtable"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        2,
 		Dataset:        2,
 		Mode:           "full",
@@ -194,7 +185,7 @@ func TestListAllSavesByMicroservice_OneForOtherMS_OneForTarget(t *testing.T) {
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -203,7 +194,7 @@ func TestListAllSavesByMicroservice_OneForOtherMS_OneForTarget(t *testing.T) {
 	saves, noOfSaves := testutils.ExtractSavesList(t, w.Body.Bytes())
 	require.Equal(t, 1, noOfSaves)
 	require.Equal(t, saveID, saves[0].SaveId)
-	require.Equal(t, msID, saves[0].MicroserviceId)
+	require.Equal(t, ms.MicroserviceId, saves[0].MicroserviceId)
 }
 
 func TestListAllSavesByMicroservice_InvalidMicroserviceId(t *testing.T) {
@@ -224,31 +215,30 @@ func TestListAllSavesByMicroservice_InvalidMicroserviceId(t *testing.T) {
 
 func TestListAllSavesByMicroservice_InvalidValidQuery(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms4"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testms4db"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
+	roleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=notabool", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=notabool", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -259,32 +249,31 @@ func TestListAllSavesByMicroservice_InvalidValidQuery(t *testing.T) {
 
 func TestListAllSavesByMicroservice_FilterValidTrue(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms5"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testms5db"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
+	roleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
 	now := time.Now()
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "validdb1_" + msID.String(),
-		Table:          "table1",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("validdb1"),
+		Table:          testutils.UniqueName("table1"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        1,
 		Dataset:        1,
 		Mode:           "full",
@@ -297,11 +286,11 @@ func TestListAllSavesByMicroservice_FilterValidTrue(t *testing.T) {
 	})
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "validdb2_" + msID.String(),
-		Table:          "table2",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("validdb2"),
+		Table:          testutils.UniqueName("table2"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        2,
 		Dataset:        2,
 		Mode:           "full",
@@ -314,11 +303,11 @@ func TestListAllSavesByMicroservice_FilterValidTrue(t *testing.T) {
 	})
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "invaliddb_" + msID.String(),
-		Table:          "table3",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("invaliddb"),
+		Table:          testutils.UniqueName("table3"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        3,
 		Dataset:        3,
 		Mode:           "full",
@@ -329,12 +318,13 @@ func TestListAllSavesByMicroservice_FilterValidTrue(t *testing.T) {
 		Created:        now,
 		Updated:        now,
 	})
+
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=true", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=true", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -344,39 +334,37 @@ func TestListAllSavesByMicroservice_FilterValidTrue(t *testing.T) {
 	require.Equal(t, 2, noOfSaves)
 	for _, save := range saves {
 		require.True(t, save.Valid)
-		require.Equal(t, msID, save.MicroserviceId)
+		require.Equal(t, ms.MicroserviceId, save.MicroserviceId)
 	}
 }
 
 func TestListAllSavesByMicroservice_FilterValidFalse(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms6"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testms6db"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
+	roleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
 	now := time.Now()
-
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "validdb1_" + msID.String(),
-		Table:          "table1",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("validdb1"),
+		Table:          testutils.UniqueName("table1"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        1,
 		Dataset:        1,
 		Mode:           "full",
@@ -389,11 +377,11 @@ func TestListAllSavesByMicroservice_FilterValidFalse(t *testing.T) {
 	})
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "invaliddb1_" + msID.String(),
-		Table:          "table2",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("invaliddb1"),
+		Table:          testutils.UniqueName("table2"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        2,
 		Dataset:        2,
 		Mode:           "full",
@@ -406,11 +394,11 @@ func TestListAllSavesByMicroservice_FilterValidFalse(t *testing.T) {
 	})
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "validdb2_" + msID.String(),
-		Table:          "table3",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("validdb2"),
+		Table:          testutils.UniqueName("table3"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        3,
 		Dataset:        3,
 		Mode:           "full",
@@ -423,11 +411,11 @@ func TestListAllSavesByMicroservice_FilterValidFalse(t *testing.T) {
 	})
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "invaliddb2_" + msID.String(),
-		Table:          "table4",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("invaliddb2"),
+		Table:          testutils.UniqueName("table4"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        4,
 		Dataset:        4,
 		Mode:           "full",
@@ -438,12 +426,13 @@ func TestListAllSavesByMicroservice_FilterValidFalse(t *testing.T) {
 		Created:        now,
 		Updated:        now,
 	})
+
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=false", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=false", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -453,38 +442,37 @@ func TestListAllSavesByMicroservice_FilterValidFalse(t *testing.T) {
 	require.Equal(t, 2, noOfSaves)
 	for _, save := range saves {
 		require.False(t, save.Valid)
-		require.Equal(t, msID, save.MicroserviceId)
+		require.Equal(t, ms.MicroserviceId, save.MicroserviceId)
 	}
 }
 
 func TestListAllSavesByMicroservice_FilterValidTrue_NoRecords(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms7"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testms7db"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
+	roleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
 	now := time.Now()
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "invaliddb1_" + msID.String(),
-		Table:          "table1",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("invaliddb1"),
+		Table:          testutils.UniqueName("table1"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        1,
 		Dataset:        1,
 		Mode:           "full",
@@ -495,12 +483,13 @@ func TestListAllSavesByMicroservice_FilterValidTrue_NoRecords(t *testing.T) {
 		Created:        now,
 		Updated:        now,
 	})
+
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=true", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=true", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
@@ -511,32 +500,31 @@ func TestListAllSavesByMicroservice_FilterValidTrue_NoRecords(t *testing.T) {
 
 func TestListAllSavesByMicroservice_FilterValidFalse_NoRecords(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
-	msID := uuid.New()
-	credID := uuid.New()
-	adminID := uuid.New()
 	ms := app.Microservice{
-		MicroserviceId: msID,
-		MSName:         "main_ms_" + msID.String(),
-		CreatedBy:      adminID,
+		MicroserviceId: uuid.New(),
+		MSName:         testutils.UniqueName("testms8"),
+		CreatedBy:      uuid.New(),
 		Created:        time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&ms).Error)
 	cred := app.Cred{
-		CredId:  credID,
-		DBName:  "db_" + msID.String(),
-		URL:     "url_" + msID.String(),
-		Created: time.Now(),
+		CredId:     uuid.New(),
+		DBName:     testutils.UniqueName("testms8db"),
+		DBUsername: testutils.UniqueName("user"),
+		URL:        testutils.UniqueName("url"),
+		Created:    time.Now(),
 	}
 	require.NoError(t, TestApp.DB.Create(&cred).Error)
-	testutils.InsertRoleCredMS(t, TestApp.DB, msID, credID, "admin", adminID)
+	roleName := testutils.UniqueName("admin")
+	testutils.InsertRoleCredMS(t, TestApp.DB, ms.MicroserviceId, cred.CredId, roleName, ms.CreatedBy)
 	now := time.Now()
 	testutils.InsertSaveRecord(t, TestApp.DB, app.SaveRecord{
 		SaveId:         uuid.New(),
-		MicroserviceId: msID,
-		CredId:         credID,
-		DBName:         "validdb1_" + msID.String(),
-		Table:          "table1",
-		SavedBy:        "tester",
+		MicroserviceId: ms.MicroserviceId,
+		CredId:         cred.CredId,
+		DBName:         testutils.UniqueName("validdb1"),
+		Table:          testutils.UniqueName("table1"),
+		SavedBy:        testutils.UniqueName("tester"),
 		Version:        1,
 		Dataset:        1,
 		Mode:           "full",
@@ -547,12 +535,13 @@ func TestListAllSavesByMicroservice_FilterValidFalse_NoRecords(t *testing.T) {
 		Created:        now,
 		Updated:        now,
 	})
+
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
 	require.NotEmpty(t, superUser)
 	require.NotEmpty(t, superPass)
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=false", msID.String())
+	url := fmt.Sprintf("/admin/microservice/%s/saves?valid=false", ms.MicroserviceId.String())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
