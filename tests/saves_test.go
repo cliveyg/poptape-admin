@@ -146,21 +146,20 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 }
 
 func TestListAllSaves_DBRecordNotFound_HandlerUnit(t *testing.T) {
-	// Set up Gin context and response recorder
+	// Create Gin context and recorder
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-
-	// Add any query params or headers needed for the handler
 	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
 
-	// If your handler expects the user in context, add it here
-	// For example: c.Set("user", app.User{...})
+	// Adapter to satisfy app.DBInterface using testutils.ChainableMockDB
+	type dbAdapter struct{ *testutils.ChainableMockDB }
+	// Implement methods for app.DBInterface that are used by the handler
+	// (already matches signature, can embed)
 
-	// Create an App with the mock DB
-	mockApp := *TestApp // shallow copy is fine
-	mockApp.DB = &testutils.MockDB{OrderError: gorm.ErrRecordNotFound}
+	mockDB := &dbAdapter{&testutils.ChainableMockDB{FindError: gorm.ErrRecordNotFound}}
+	mockApp := *TestApp
+	mockApp.DB = mockDB
 
-	// Call the handler directly
 	mockApp.ListAllSaves(c)
 
 	require.Equal(t, http.StatusNotFound, w.Code)
@@ -168,19 +167,16 @@ func TestListAllSaves_DBRecordNotFound_HandlerUnit(t *testing.T) {
 }
 
 func TestListAllSaves_DBGenericError_HandlerUnit(t *testing.T) {
-	// Set up Gin context and response recorder
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-
 	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
 
-	// If your handler expects the user in context, add it here
-	// For example: c.Set("user", app.User{...})
+	type dbAdapter struct{ *testutils.ChainableMockDB }
 
+	mockDB := &dbAdapter{&testutils.ChainableMockDB{FindError: errors.New("forced db error")}}
 	mockApp := *TestApp
-	mockApp.DB = &testutils.MockDB{OrderError: errors.New("forced db error")}
+	mockApp.DB = mockDB
 
-	// Call the handler directly
 	mockApp.ListAllSaves(c)
 
 	require.Equal(t, http.StatusInternalServerError, w.Code)
