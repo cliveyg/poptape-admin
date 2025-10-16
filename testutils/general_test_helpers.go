@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"net/http"
@@ -56,15 +57,6 @@ func SetUserInactive(t *testing.T, testApp *app.App, username string) {
 	if result.Error != nil {
 		t.Fatalf("failed to set user inactive: %v", result.Error)
 	}
-}
-
-func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
-	var resp struct {
-		TotalSaves int              `json:"total_saves"`
-		Saves      []app.SaveRecord `json:"saves"`
-	}
-	require.NoError(t, json.Unmarshal(body, &resp))
-	return resp.Saves, resp.TotalSaves
 }
 
 var (
@@ -143,4 +135,26 @@ func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.SaveID)
 	return resp.SaveID
+}
+
+func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
+	var resp struct {
+		NoOfSaves int              `json:"no_of_saves"`
+		Saves     []app.SaveRecord `json:"saves"`
+	}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	return resp.Saves, resp.NoOfSaves
+}
+
+func ListAllSavesExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
+	var resp struct {
+		NoOfSaves int              `json:"total_saves"`
+		Saves     []app.SaveRecord `json:"saves"`
+	}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	return resp.Saves, resp.NoOfSaves
+}
+
+func UniqueName(prefix string) string {
+	return fmt.Sprintf("%s_%s", prefix, uuid.New().String())
 }
