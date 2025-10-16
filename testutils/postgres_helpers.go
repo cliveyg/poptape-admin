@@ -32,6 +32,11 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 				}
 			}
 		}
+		if table == "saverecords" {
+			var count int64
+			a.DB.Table(table).Count(&count)
+			a.Log.Info().Msgf("DEBUG: Rows left in %s after truncate: %d", table, count)
+		}
 	}
 	a.Log.Debug().Msg("All tables cleared")
 

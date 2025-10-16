@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"os"
-	"reflect"
 	"regexp"
 	"strconv"
 	"time"
@@ -141,23 +140,6 @@ func ParseToken(ts string) (*Claims, error) {
 	}
 	return nil, errors.New("invalid token claims")
 
-}
-
-//-----------------------------------------------------------------------------
-
-func StructToMap(obj interface{}) map[string]interface{} {
-	mp := make(map[string]interface{})
-	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-	typ := val.Type()
-	for i := 0; i < val.NumField(); i++ {
-		fieldName := typ.Field(i).Name
-		fieldValue := val.Field(i).Interface()
-		mp[fieldName] = fieldValue
-	}
-	return mp
 }
 
 //-----------------------------------------------------------------------------
