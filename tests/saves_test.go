@@ -141,3 +141,77 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, w4.Code)
 	require.Contains(t, w4.Body.String(), "Forbidden")
 }
+
+func TestMetadataReport_HappyPath_Super(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	dbName := "poptape_reviews"
+	msName := "reviews"
+	roleName := "reviews"
+	msID := testutils.EnsureTestMicroserviceAndCred(t, TestApp, token, dbName, msName, roleName)
+	saveID1 := testutils.APICreateSaveRecord(t, TestApp, token, msID, dbName)
+	saveID2 := testutils.APICreateSaveRecord(t, TestApp, token, msID, dbName)
+
+	req, _ := http.NewRequest("GET", "/admin/saves?meta=true", nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		NoOfMicroservices    int            `json:"no_of_microservices"`
+		SavedRecordsMetadata []app.Metadata `json:"saved_records_metadata"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.GreaterOrEqual(t, resp.NoOfMicroservices, 1)
+	require.GreaterOrEqual(t, len(resp.SavedRecordsMetadata), 1)
+
+	meta := resp.SavedRecordsMetadata[0]
+	require.Equal(t, msID, meta.MicroserviceId)
+	require.NotEmpty(t, meta.CredId)
+	require.Equal(t, roleName, meta.RoleName)
+	require.Equal(t, dbName, meta.DBName)
+	require.NotEmpty(t, meta.Type)
+	require.True(t, meta.LatestVersion >= 1)
+	require.NotEmpty(t, meta.LastSaveId)
+	require.Equal(t, 2, meta.SavedCount)
+	require.Equal(t, meta.SavedCount, meta.ValidCount+meta.InvalidCount)
+	saveIDs := []string{saveID1, saveID2}
+	require.Contains(t, saveIDs, meta.LastSaveId.String())
+
+	testutils.ResetPostgresDB(t, TestApp)
+}
+
+func TestMetadataReport_NoRecordsFound_Returns404(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	req, _ := http.NewRequest("GET", "/admin/saves?meta=true", nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "No records found")
+}
+
+func TestMetadataReport_BadMetaValue_Returns400(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	req, _ := http.NewRequest("GET", "/admin/saves?meta=badvalue", nil)
+	req.Header.Set("y-access-token", token)
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "Invalid meta value")
+}
