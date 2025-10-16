@@ -93,8 +93,9 @@ func DropTestMicroservicesByPrefix(t *testing.T, db *gorm.DB, msPrefix string) {
 	}
 }
 
-// InsertRoleCredMS inserts a RoleCredMS record for test setup.
+// InsertRoleCredMS inserts a unique RoleCredMS record for test setup.
 func InsertRoleCredMS(t *testing.T, db *gorm.DB, microserviceId, credId uuid.UUID, roleName string, createdBy uuid.UUID) {
+	// Guarantee uniqueness for the role_cred_ms composite key (microserviceId, credId, roleName)
 	rcm := app.RoleCredMS{
 		MicroserviceId: microserviceId,
 		CredId:         credId,
@@ -102,5 +103,30 @@ func InsertRoleCredMS(t *testing.T, db *gorm.DB, microserviceId, credId uuid.UUI
 		CreatedBy:      createdBy,
 		Created:        time.Now(),
 	}
+	// Check for existing record before insert to avoid duplicates
+	var existing app.RoleCredMS
+	err := db.Where("microservice_id = ? AND cred_id = ? AND role_name = ?", microserviceId, credId, roleName).First(&existing).Error
+	if err == nil {
+		// Already exists, skip insert
+		return
+	}
+	require.True(t, err == gorm.ErrRecordNotFound)
 	require.NoError(t, db.Create(&rcm).Error)
+}
+
+// InsertSaveRecord inserts a unique SaveRecord into the DB for direct test setup.
+func InsertSaveRecord(t *testing.T, db *gorm.DB, rec app.SaveRecord) {
+	// Guarantee uniqueness for SaveRecord (assume SaveId is unique)
+	if rec.SaveId == uuid.Nil {
+		rec.SaveId = uuid.New()
+	}
+	// Check for existing record before insert to avoid duplicates
+	var existing app.SaveRecord
+	err := db.Where("save_id = ?", rec.SaveId).First(&existing).Error
+	if err == nil {
+		// Already exists, skip insert
+		return
+	}
+	require.True(t, err == gorm.ErrRecordNotFound)
+	require.NoError(t, db.Create(&rec).Error)
 }

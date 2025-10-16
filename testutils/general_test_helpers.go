@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -135,13 +134,6 @@ func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.SaveID)
 	return resp.SaveID
-}
-
-// InsertSaveRecord inserts a SaveRecord into the DB for direct test setup.
-func InsertSaveRecord(t *testing.T, db *gorm.DB, rec app.SaveRecord) {
-	if err := db.Create(&rec).Error; err != nil {
-		t.Fatalf("failed to insert SaveRecord: %v", err)
-	}
 }
 
 // ExtractSavesList parses the saves list response for "no_of_saves" and "saves".
