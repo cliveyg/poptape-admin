@@ -152,24 +152,16 @@ func (a *App) ConnectToPostgres() (*gorm.DB, error) {
 func (a *App) MigrateModels() {
 
 	a.Log.Debug().Msg("Migrating models")
-	var dbName, schema string
-	a.DB.Raw("SELECT current_database()").Scan(&dbName)
-	a.DB.Raw("SELECT current_schema()").Scan(&schema)
-	a.Log.Info().Msgf("Using DB: %s, schema: %s", dbName, schema)
+
 	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
-	var exists bool
-	a.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'saverecords')").Scan(&exists)
-	a.Log.Info().Msgf("DEBUG: saverecords exists after migrate: %v", exists)
 	// we have to migrate user separately due to dependencies on other models
 	err = a.DB.AutoMigrate(&User{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
-	a.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'saverecords')").Scan(&exists)
-	a.Log.Info().Msgf("DEBUG: saverecords exists after migrate: %v", exists)
 	a.Log.Debug().Msg("Models migrated successfully ✓")
 }
 
@@ -415,7 +407,7 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		return err
 	}
 
-	if err := cmd.Wait(); err != nil {
+	if err = cmd.Wait(); err != nil {
 		a.Log.Info().Msgf("pg_dump cmd.Wait error [%s]", err.Error())
 		return err
 	}
@@ -436,7 +428,7 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 		Type:           creds.Type,
 		Size:           *n,
 	}
-	if err := a.SaveWithAutoVersion(&sr); err != nil {
+	if err = a.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}
