@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/stretchr/testify/require"
