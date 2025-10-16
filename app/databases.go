@@ -730,7 +730,7 @@ func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 	tabs, err := a.listTables(crd, pw)
 	if err != nil {
 		a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
-		return http.StatusInternalServerError, errors.New("Error listing tables")
+		return http.StatusInternalServerError, errors.New("error listing tables")
 	}
 	for _, table := range tabs {
 		a.Log.Debug().Msgf("Table is [%s]", table)

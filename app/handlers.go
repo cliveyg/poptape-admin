@@ -698,57 +698,12 @@ func (a *App) ListAllRoles(c *gin.Context) {
 // ListAllSavesByMicroservice
 //-----------------------------------------------------------------------------
 
-// ListAllSavesByMicroservice
-//func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
-//
-//		// TODO: Pagination?
-//
-//		var msId uuid.UUID
-//		if err := a.getUUIDFromParams(c, &msId, "ms_id"); err != nil {
-//			a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-//			c.JSON(http.StatusBadRequest, gin.H{"message": "Microservice id is invalid"})
-//		}
-//
-//		var saves []SaveRecord
-//		var res DBInterface
-//		// look for querystring valid= if not there then return all valid
-//		// and invalid records
-//		validStr := c.Query("valid")
-//		if validStr != "" {
-//			vl := []string{"true", "false"}
-//			if !slices.Contains(vl, validStr) {
-//				a.Log.Info().Msg("Value of 'valid' querystring is invalid")
-//				c.JSON(http.StatusBadRequest, gin.H{"message": "Value of 'valid' querystring is invalid"})
-//				return
-//			}
-//			v, _ := strconv.ParseBool(validStr)
-//			res = a.DB.Where(map[string]interface{}{"microservice_id": msId.String(), "valid": v}).Order("created desc").Find(&saves)
-//		} else {
-//			res = a.DB.Where("microservice_id = ?", msId.String()).Order("created desc").Find(&saves)
-//		}
-//		if res.Error != nil {
-//			a.Log.Info().Msgf("Error returning saves [%s]", res.Error.Error())
-//			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went nope"})
-//			return
-//		}
-//		ls := len(saves)
-//		if ls == 0 {
-//			a.Log.Info().Msg("No saves found")
-//			c.JSON(http.StatusNotFound, gin.H{"message": "No saves found"})
-//			return
-//		}
-//
-//		c.JSON(http.StatusOK, gin.H{"no_of_saves": ls, "saves": saves})
-//	}
 func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
 	// TODO: Pagination?
 
 	var msId uuid.UUID
-	if err := a.getUUIDFromParams(c, &msId, "ms_id"); err != nil {
-		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Microservice id is invalid"})
-		return
-	}
+	// can ignore possible errors as this gets checked in middleware too
+	_ = a.getUUIDFromParams(c, &msId, "ms_id")
 
 	var saves []SaveRecord
 	var res *gorm.DB // <- Use *gorm.DB, not DBInterface
