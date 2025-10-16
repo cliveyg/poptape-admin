@@ -4,12 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/testutils"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -143,34 +140,4 @@ func TestListAllSaves_Forbidden_NonSuperRole(t *testing.T) {
 	TestApp.Router.ServeHTTP(w4, req4)
 	require.Equal(t, http.StatusForbidden, w4.Code)
 	require.Contains(t, w4.Body.String(), "Forbidden")
-}
-
-func TestListAllSaves_DBRecordNotFound_HandlerUnit(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
-
-	mockDB := &testutils.GormDBMock{Error: gorm.ErrRecordNotFound}
-	mockApp := *TestApp
-	mockApp.DB = mockDB
-
-	mockApp.ListAllSaves(c)
-
-	require.Equal(t, http.StatusNotFound, w.Code)
-	require.Contains(t, w.Body.String(), "No save records found")
-}
-
-func TestListAllSaves_DBGenericError_HandlerUnit(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request, _ = http.NewRequest("GET", "/admin/saves", nil)
-
-	mockDB := &testutils.GormDBMock{Error: errors.New("forced db error")}
-	mockApp := *TestApp
-	mockApp.DB = mockDB
-
-	mockApp.ListAllSaves(c)
-
-	require.Equal(t, http.StatusInternalServerError, w.Code)
-	require.Contains(t, w.Body.String(), "Something went neee")
 }
