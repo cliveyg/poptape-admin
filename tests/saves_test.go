@@ -186,7 +186,7 @@ func TestMetadataReport_HappyPath_Super(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 }
 
-func TestMetadataReport_NoRecordsFound_Returns404(t *testing.T) {
+func TestMetadataReport_NoRecordsFound_Returns200WithEmptyResult(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
 	superUser := os.Getenv("SUPERUSER")
@@ -197,8 +197,14 @@ func TestMetadataReport_NoRecordsFound_Returns404(t *testing.T) {
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusNotFound, w.Code)
-	require.Contains(t, w.Body.String(), "No records found")
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		NoOfMicroservices    int            `json:"no_of_microservices"`
+		SavedRecordsMetadata []app.Metadata `json:"saved_records_metadata"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.NoOfMicroservices)
+	require.Len(t, resp.SavedRecordsMetadata, 0)
 }
 
 func TestMetadataReport_BadMetaValue_Returns400(t *testing.T) {
