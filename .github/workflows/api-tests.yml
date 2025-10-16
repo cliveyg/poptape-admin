@@ -23,7 +23,6 @@ jobs:
     services:
       pdb:
         image: postgres
-        command: postgres -c log_statement=all
         env:
           POSTGRES_DB: poptape_admin_test
           POSTGRES_PASSWORD: "${{ secrets.POSTGRES_TESTDB_PASSWORD }}"
