@@ -86,7 +86,7 @@ func (a *App) InitialisePostgres() {
 	x := 1
 	for time.Since(start) < timeout {
 		a.Log.Debug().Msgf("Trying to connect to db...[%d]", x)
-		a.DB, err = a.connectToPostgres()
+		a.DB, err = a.ConnectToPostgres()
 		if err == nil {
 			break
 		}
@@ -107,7 +107,7 @@ func (a *App) InitialisePostgres() {
 // connectToPostgres
 //-----------------------------------------------------------------------------
 
-func (a *App) connectToPostgres() (*gorm.DB, error) {
+func (a *App) ConnectToPostgres() (*gorm.DB, error) {
 
 	dsn := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		os.Getenv("POSTGRES_USERNAME"),

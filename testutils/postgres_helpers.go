@@ -62,7 +62,14 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 			panic(fmt.Sprintf("Failed to reseed microservices: %v", err))
 		}
 	}
-	a.Log.Debug().Msg("Everything reseeded")
+
+	sqlDB, _ := a.DB.DB()
+	sqlDB.Close()
+	a.DB, err = a.ConnectToPostgres()
+	if err == nil {
+		t.Fatalf("Failed to reseed reconnect to Postgres: %v", err)
+	}
+	a.Log.Debug().Msg("Everything reseeded and db reconnected")
 }
 
 func GetAnyAdminId(t *testing.T, db *gorm.DB) uuid.UUID {
