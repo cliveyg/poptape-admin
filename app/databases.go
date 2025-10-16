@@ -152,7 +152,7 @@ func (a *App) MigrateModels() {
 
 	a.Log.Debug().Msg("Migrating models")
 
-	err := a.DB.AutoMigrate(&User{}, &Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{})
+	err := a.DB.AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{}, &User{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
