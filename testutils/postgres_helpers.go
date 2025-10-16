@@ -29,9 +29,15 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 
 	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-= resetDB =-=-=-=-=-=-=-=-=-=-=-=-=-=-")
 
+	var exists bool
+	a.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'saverecords')").Scan(&exists)
+	a.Log.Info().Msgf("DEBUG: saverecords exists before truncate: %v", exists)
+
 	for _, table := range tables {
 		if a.DB.Migrator().HasTable(table) {
 			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
+			a.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'saverecords')").Scan(&exists)
+			a.Log.Info().Msgf("DEBUG: saverecords exists before truncate: %v", exists)
 			if err := a.DB.Exec(stmt).Error; err != nil {
 				if t != nil {
 					t.Fatalf("Failed to truncate table %s: %v", table, err)

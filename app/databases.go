@@ -160,11 +160,16 @@ func (a *App) MigrateModels() {
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
+	var exists bool
+	a.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'saverecords')").Scan(&exists)
+	a.Log.Info().Msgf("DEBUG: saverecords exists after migrate: %v", exists)
 	// we have to migrate user separately due to dependencies on other models
 	err = a.DB.AutoMigrate(&User{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
+	a.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'saverecords')").Scan(&exists)
+	a.Log.Info().Msgf("DEBUG: saverecords exists after migrate: %v", exists)
 	a.Log.Debug().Msg("Models migrated successfully ✓")
 }
 
