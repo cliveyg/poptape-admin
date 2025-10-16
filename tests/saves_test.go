@@ -21,7 +21,8 @@ func newTestApp(t *testing.T) *app.App {
 	return a
 }
 
-func TestListAllSaves_HappyPath_Super(t *testing.T) {
+// func TestListAllSaves_HappyPath_Super(t *testing.T) {
+func TestWibble_1(t *testing.T) {
 	appInstance := newTestApp(t)
 	testutils.ResetPostgresDB(t, appInstance)
 	testutils.ResetMongoDB(t, appInstance)
@@ -50,7 +51,8 @@ func TestListAllSaves_HappyPath_Super(t *testing.T) {
 	require.Contains(t, saveIDs, saveID2)
 }
 
-func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
+// func TestListAllSaves_NoRecordsFound_Returns404(t *testing.T) {
+func TestWibble_2(t *testing.T) {
 	appInstance := newTestApp(t)
 	testutils.ResetPostgresDB(t, appInstance)
 	testutils.ResetMongoDB(t, appInstance)

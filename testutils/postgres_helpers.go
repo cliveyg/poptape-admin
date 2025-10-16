@@ -10,13 +10,18 @@ import (
 )
 
 func ResetPostgresDB(t *testing.T, a *app.App) {
+	var dbName, schema string
+	a.DB.Raw("SELECT current_database()").Scan(&dbName)
+	a.DB.Raw("SELECT current_schema()").Scan(&schema)
+	a.Log.Info().Msgf("Using DB: %s, schema: %s", dbName, schema)
+
 	tables := []string{
-		"saverecords",
 		"creds",
 		"role_cred_ms",
 		"users",
 		"roles",
 		"microservices",
+		"saverecords",
 	}
 
 	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-= resetDB =-=-=-=-=-=-=-=-=-=-=-=-=-=-")
