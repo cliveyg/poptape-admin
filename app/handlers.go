@@ -427,9 +427,9 @@ func (a *App) CreateUser(c *gin.Context) {
 		return
 	}
 
-	// auto validate user if in DEV or TEST env
+	// auto validate user if in DEV
 	ms := fmt.Sprintf("User [%s] created but not validated; Id is [%s]", u.Username, u.AdminId.String())
-	if os.Getenv("ENVIRONMENT") == "DEV" || os.Getenv("ENVIRONMENT") == "TEST" {
+	if os.Getenv("ENVIRONMENT") == "DEV" {
 		u.Validated = true
 		res = a.DB.Save(&u)
 		if res.Error != nil {

@@ -51,6 +51,13 @@ func SetUserValidated(t *testing.T, testApp *app.App, username string) {
 	}
 }
 
+func SetUserInactive(t *testing.T, testApp *app.App, username string) {
+	result := testApp.DB.Model(&app.User{}).Where("username = ?", username).Update("active", false)
+	if result.Error != nil {
+		t.Fatalf("failed to set user inactive: %v", result.Error)
+	}
+}
+
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	var resp struct {
 		TotalSaves int              `json:"total_saves"`
