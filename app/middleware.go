@@ -62,7 +62,7 @@ func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
 			msId, err := uuid.Parse(c.Param("msId"))
 			if err != nil {
 				a.Log.Info().Msgf("Invalid ms id in url [%s]", err.Error())
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Bad request [ms]"})
 				return
 			}
 
