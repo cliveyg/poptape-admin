@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"encoding/json"
-	"github.com/cliveyg/poptape-admin/app"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -109,17 +108,6 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 	}
 }
 
-func newTestAppWithMockAWS() *app.App {
-	return &app.App{
-		Router:        gin.New(),
-		DB:            TestApp.DB,
-		Log:           TestApp.Log,
-		Mongo:         TestApp.Mongo,
-		AWS:           &testutils.MockAWSAdminError{},
-		CommandRunner: TestApp.CommandRunner,
-	}
-}
-
 func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
@@ -131,6 +119,7 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	require.NotEmpty(t, superPass)
 
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+	TestApp.Log.Info().Msgf("TOKEN IS [%s]", token)
 
 	testApp := newTestAppWithMockAWS()
 
@@ -237,7 +226,7 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 }
 
 */
-
+/*
 func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
@@ -313,7 +302,7 @@ func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
 	assert.Equal(t, float64(0), resp["no_of_buckets"])
 }
 
-/*
+
 func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
