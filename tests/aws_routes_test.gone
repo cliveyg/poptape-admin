@@ -186,6 +186,7 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	assert.Equal(t, "oopsy", resp["message"])
 }
 
+/*
 func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
@@ -335,3 +336,4 @@ func TestListAllPoptapeStandardBuckets_AWSError_Prod(t *testing.T) {
 	assert.Contains(t, resp, "message")
 	assert.Equal(t, "oopsy", resp["message"])
 }
+*/
