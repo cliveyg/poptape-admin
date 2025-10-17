@@ -148,12 +148,12 @@ func (a *App) InitialiseRoutes() {
 	//-----------------------------------------------------------------
 
 	// get list of all aws poptape standard users
-	a.Router.GET("/admin/aws/users", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin", "poptape_aws"}), func(c *gin.Context) {
+	a.Router.GET("/admin/aws/users", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin", "aws"}), func(c *gin.Context) {
 		a.ListAllPoptapeStandardUsers(c)
 	})
 
 	// get list of all aws poptape standard users
-	a.Router.GET("/admin/aws/buckets", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin", "poptape_aws"}), func(c *gin.Context) {
+	a.Router.GET("/admin/aws/buckets", a.authMiddleware(false), a.accessControlMiddleware([]string{"super", "admin", "aws"}), func(c *gin.Context) {
 		a.ListAllPoptapeStandardBuckets(c)
 	})
 

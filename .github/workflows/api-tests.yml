@@ -108,7 +108,8 @@ jobs:
           set -e
           set -o pipefail
           touch poptape_admin.log
-          go test -v -cover -coverprofile=cover.out ./tests -run '^TestListAllPoptapeStandardUsers' | tee test.out
+          # go test -v -cover -coverprofile=cover.out ./tests -run '^TestListAllPoptapeStandardUsers' | tee test.out
+          go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
           grep -v '/tests/' cover.out | grep -v '/testutils/' > cover.out.filtered
           mv cover.out.filtered cover.out
         shell: bash
