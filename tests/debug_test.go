@@ -7,6 +7,7 @@ import (
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/testutils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -26,7 +27,7 @@ func newTestAppWithMockAWS() *app.App {
 	}
 }
 
-func Wibble_ListAWSUsers(t *testing.T) {
+func TestWibble_ListAWSUsers(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
 	defer os.Unsetenv("ENVIRONMENT")
@@ -64,7 +65,7 @@ func Wibble_ListAWSUsers(t *testing.T) {
 	assert.Equal(t, "mock AWS error", resp["error"])
 }
 
-func Wibble_CreateUser(t *testing.T) {
+func TestWibble_CreateUser(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 
 	superUser := os.Getenv("SUPERUSER")
@@ -107,4 +108,46 @@ func Wibble_CreateUser(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusOK, w2.Code, "login as new user should return 200")
+}
+
+func TestWibble_FetchUser_HappyPath(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	userUsername := "fetchuser_" + testutils.RandString(8)
+	userPassword := "fetchpass1"
+	userReq := map[string]string{
+		"username":         userUsername,
+		"password":         base64.StdEncoding.EncodeToString([]byte(userPassword)),
+		"confirm_password": base64.StdEncoding.EncodeToString([]byte(userPassword)),
+	}
+	body, _ := json.Marshal(userReq)
+	req, err := http.NewRequest("POST", "/admin/user", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	testutils.SetUserValidated(t, TestApp, userUsername)
+
+	var user app.User
+	err = TestApp.DB.Where("username = ?", userUsername).First(&user).Error
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, user.AdminId)
+
+	fetchReq, err := http.NewRequest("GET", "/admin/user/"+user.AdminId.String(), nil)
+	require.NoError(t, err)
+	fetchReq.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, fetchReq)
+	require.Equal(t, http.StatusOK, w2.Code)
+	require.Contains(t, w2.Body.String(), userUsername)
 }
