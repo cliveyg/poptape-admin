@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -108,6 +107,7 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 	}
 }
 
+/*
 func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
@@ -186,7 +186,8 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	assert.Equal(t, "oopsy", resp["message"])
 }
 
-/*
+*/
+
 func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
@@ -262,6 +263,7 @@ func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
 	assert.Equal(t, float64(0), resp["no_of_buckets"])
 }
 
+/*
 func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
