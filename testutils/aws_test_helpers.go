@@ -228,6 +228,8 @@ func (m *MockAWSAdminError) ListAllStandardBuckets(ctx context.Context) ([]s3typ
 	return nil, fmt.Errorf("mock AWS ListAllStandardBuckets error")
 }
 
+func (m *MockAWSAdminError) SetS3(client *s3.Client) {}
+
 // MakeTestUser returns a valid test user with the "super" role.
 func MakeTestUser() app.User {
 	return app.User{
