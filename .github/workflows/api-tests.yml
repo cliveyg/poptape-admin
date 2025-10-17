@@ -97,8 +97,14 @@ jobs:
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
+      - name: Set unit and integration test flags
+        run: |
+          echo "RUN_UNIT_TESTS=true" >> $GITHUB_ENV
+          echo "RUN_INT_TESTS=false" >> $GITHUB_ENV
+
       # unit tests:
       - name: Run unit tests and generate test coverage file (excluding tests and testutils from coverage report)
+        if: env.RUN_UNIT_TESTS == 'true'
         run: |
           set -e
           set -o pipefail
@@ -110,6 +116,7 @@ jobs:
         shell: bash
 
       - name: Check unit test coverage is above threshold
+        if: env.RUN_UNIT_TESTS == 'true'
         env:
           UNIT_TESTCOVERAGE_THRESHOLD: 0
         run: |
@@ -128,14 +135,17 @@ jobs:
           echo "-----------------------------------------------------------"
         shell: bash
 
-      - name: Show unit coverage summary
+      - name: Show unit test coverage summary
+        if: env.RUN_UNIT_TESTS == 'true'
         run: go tool cover -func=unit.cover.out
 
-      - name: Generate Unit HTML coverage report
+      - name: Generate Unit Test HTML coverage report
+        if: env.RUN_UNIT_TESTS == 'true'
         run: |
           go tool cover -html=unit.cover.out -o unit.coverage.html
 
       - name: Upload HTML coverage report
+        if: env.RUN_UNIT_TESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -143,6 +153,7 @@ jobs:
 
       # integration tests:
       - name: Run integration tests and generate test coverage file (excluding tests and testutils from coverage report)
+        if: env.RUN_INT_TESTS == 'true'
         run: |
           set -e
           set -o pipefail
@@ -153,6 +164,7 @@ jobs:
         shell: bash
 
       - name: Check integration test coverage is above threshold
+        if: env.RUN_INT_TESTS == 'true'
         env:
           INT_TESTCOVERAGE_THRESHOLD: 0
         run: |
@@ -171,14 +183,17 @@ jobs:
           echo "-----------------------------------------------------------"
         shell: bash
 
-      - name: Show integration coverage summary
+      - name: Show integration test coverage summary
+        if: env.RUN_INT_TESTS == 'true'
         run: go tool cover -func=int.cover.out
 
       - name: Generate Integration HTML coverage report
+        if: env.RUN_INT_TESTS == 'true'
         run: |
           go tool cover -html=int.cover.out -o int.coverage.html
 
-      - name: Upload HTML coverage report
+      - name: Upload Integration Tests HTML coverage report
+        if: env.RUN_INT_TESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -187,11 +202,17 @@ jobs:
       - name: Install gcov2lcov
         run: go install github.com/jandelgado/gcov2lcov@latest
 
-      - name: Convert Go int.cover.out and unit.cover.out to lcov.info
+      - name: Convert Go unit.cover.out to lcov.info
+        if: env.RUN_UNIT_TESTS == 'true'
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gcov2lcov -infile unit.cover.out -outfile unit.coverage.lcov
+
+      - name: Convert Go int.cover.out to lcov.info
+        if: env.RUN_INT_TESTS == 'true'
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           gcov2lcov -infile int.cover.out -outfile int.coverage.lcov
-          gcov2lcov -infile unit.cover.out -outfile unit.coverage.lcov
 
       - name: Create coverage badges
         uses: gaelgirodon/ci-badges-action@v1
