@@ -144,11 +144,11 @@ jobs:
         run: |
           go tool cover -html=unit.cover.out -o unit.coverage.html
 
-      - name: Upload HTML coverage report
+      - name: Upload Unit Test HTML coverage report
         if: env.RUN_UNIT_TESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: unit-test-coverage-report
           path: unit.coverage.html
 
       # integration tests:
@@ -196,7 +196,7 @@ jobs:
         if: env.RUN_INT_TESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: int-test-coverage-report
           path: int.coverage.html
 
       - name: Install gcov2lcov
