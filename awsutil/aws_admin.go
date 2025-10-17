@@ -255,9 +255,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 //-----------------------------------------------------------------------------
 
 func (aw *AWSAdmin) ListAllUsers(ctx context.Context) ([]iamtypes.User, error) {
-	if aw.IAM == nil {
-		return nil, fmt.Errorf("AWSAdmin.IAM is nil")
-	}
 
 	var users []iamtypes.User
 	input := &iam.ListUsersInput{}
@@ -344,9 +341,7 @@ func (aw *AWSAdmin) DeleteBucketCompletely(ctx context.Context, bucketName strin
 //-----------------------------------------------------------------------------
 
 func (aw *AWSAdmin) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
-	if aw.S3 == nil {
-		return nil, fmt.Errorf("AWSAdmin.S3 is nil")
-	}
+
 	out, err := aw.S3.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list buckets: %w", err)
