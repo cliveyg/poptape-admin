@@ -3,8 +3,10 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/testutils"
@@ -17,6 +19,13 @@ func TestListAllPoptapeStandardUsers_HappyPath(t *testing.T) {
 
 	// Ensure clean slate
 	testutils.ClearAllIAMUsers(ctx, iamClient)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
 	// Seed users: 2 standard, 2 others (different path and no path)
 	usersToSeed := map[string]string{
@@ -33,6 +42,8 @@ func TestListAllPoptapeStandardUsers_HappyPath(t *testing.T) {
 	// If auth is required, add headers/cookies here
 
 	w := httptest.NewRecorder()
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
 	TestApp.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -62,6 +73,13 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 	// Ensure clean slate
 	testutils.ClearAllIAMUsers(ctx, iamClient)
 
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
 	// Seed only non-standard users
 	usersToSeed := map[string]string{
 		"other1": "/other-type/",
@@ -71,6 +89,8 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 	defer cleanup()
 
 	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w, req)
 
