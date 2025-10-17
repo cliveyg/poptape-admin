@@ -2,7 +2,15 @@ package testutils
 
 import (
 	"context"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/awsutil"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"gorm.io/gorm"
 	"log"
 	"os"
 	"time"
@@ -10,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
 // GetAWSIAMClient returns a configured IAM client for LocalStack.
@@ -128,4 +137,108 @@ func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]types.User, erro
 		return nil, err
 	}
 	return out.Users, nil
+}
+
+// GetAWSS3Client returns a real or localstack S3 client for integration tests.
+func GetAWSS3Client(ctx context.Context) *s3.Client {
+	logger := zerolog.New(os.Stdout)
+	aw, err := awsutil.NewAWSAdmin(ctx, &logger)
+	if err != nil {
+		panic(err)
+	}
+	return aw.S3
+}
+
+// CreateS3Bucket creates a bucket by name (ignores errors if already exists).
+func CreateS3Bucket(ctx context.Context, s3Client *s3.Client, name string) error {
+	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: &name,
+	})
+	return err
+}
+
+// DeleteS3Bucket deletes a bucket by name (ignores errors if not exists).
+func DeleteS3Bucket(ctx context.Context, s3Client *s3.Client, name string) error {
+	_, err := s3Client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		Bucket: &name,
+	})
+	return err
+}
+
+// ClearAllS3Buckets deletes all buckets (use with caution in test environment).
+func ClearAllS3Buckets(ctx context.Context, s3Client *s3.Client) error {
+	out, err := s3Client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err != nil {
+		return err
+	}
+	for _, b := range out.Buckets {
+		if b.Name != nil {
+			_ = DeleteS3Bucket(ctx, s3Client, *b.Name)
+		}
+	}
+	return nil
+}
+
+// SeedS3Buckets creates all given buckets and returns a cleanup func.
+func SeedS3Buckets(ctx context.Context, s3Client *s3.Client, bucketNames []string) func() {
+	for _, name := range bucketNames {
+		_ = CreateS3Bucket(ctx, s3Client, name)
+	}
+	return func() {
+		for _, name := range bucketNames {
+			_ = DeleteS3Bucket(ctx, s3Client, name)
+		}
+	}
+}
+
+// MockAWSAdminError is a test utility mock for AWSAdminInterface that always returns an error from ListAllUsers.
+// All other interface methods are stubbed out with zero values.
+type MockAWSAdminError struct{}
+
+func (m *MockAWSAdminError) TestConnection(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) CreateUserWithAccessKey(ctx context.Context, userName string) (*iamtypes.AccessKey, error) {
+	return nil, nil
+}
+
+func (m *MockAWSAdminError) DeleteUserCompletely(ctx context.Context, userName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) ListAllUsers(ctx context.Context) ([]iamtypes.User, error) {
+	return nil, fmt.Errorf("mock AWS error")
+}
+
+func (m *MockAWSAdminError) CreateBucket(ctx context.Context, bucketName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) EmptyBucket(ctx context.Context, bucketName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) DeleteBucketCompletely(ctx context.Context, bucketName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
+	return nil, fmt.Errorf("mock AWS error")
+}
+
+// MakeTestUser returns a valid test user with the "super" role.
+func MakeTestUser() app.User {
+	return app.User{
+		AdminId:   uuid.New(),
+		Username:  "testsuper",
+		Password:  []byte("password"),
+		LastLogin: time.Now(),
+		Active:    true,
+		Validated: true,
+		Roles:     []app.Role{{Name: "super"}},
+		Created:   time.Now(),
+		Updated:   time.Now(),
+		Deleted:   gorm.DeletedAt{},
+	}
 }

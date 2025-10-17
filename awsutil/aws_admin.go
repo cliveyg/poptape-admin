@@ -20,6 +20,10 @@ type AWSAdmin struct {
 	Log *zerolog.Logger
 }
 
+//-----------------------------------------------------------------------------
+// AWSAdminInterface
+//-----------------------------------------------------------------------------
+
 type AWSAdminInterface interface {
 	TestConnection(ctx context.Context) error
 	CreateUserWithAccessKey(ctx context.Context, userName string) (*iamtypes.AccessKey, error)
@@ -32,38 +36,8 @@ type AWSAdminInterface interface {
 }
 
 //-----------------------------------------------------------------------------
-// ListAllPoptapeStandardBuckets
+// AWSAdminInterface
 //-----------------------------------------------------------------------------
-
-//func NewAWSAdmin(ctx context.Context, logger *zerolog.Logger) (*AWSAdmin, error) {
-//	cfg, err := config.LoadDefaultConfig(ctx)
-//	if err != nil {
-//		logger.Error().Err(err).Msg("AWS config error")
-//		return nil, fmt.Errorf("unable to load AWS SDK config: %w", err)
-//	}
-//	return &AWSAdmin{
-//		IAM: iam.NewFromConfig(cfg),
-//		S3:  s3.NewFromConfig(cfg),
-//		Log: logger,
-//	}, nil
-//}
-
-// LocalStackResolver provides a custom endpoint for AWS SDK.
-type LocalStackResolver struct {
-	Endpoint string
-}
-
-// Implements aws.EndpointResolverWithOptions for v1.39.2
-func (r LocalStackResolver) ResolveEndpoint(service, region string, options ...interface{}) (aws.Endpoint, error) {
-	if r.Endpoint != "" {
-		return aws.Endpoint{
-			URL:               r.Endpoint,
-			SigningRegion:     region,
-			HostnameImmutable: true, // For S3 compatibility
-		}, nil
-	}
-	return aws.Endpoint{}, &aws.EndpointNotFoundError{}
-}
 
 func NewAWSAdmin(ctx context.Context, logger *zerolog.Logger) (*AWSAdmin, error) {
 	endpoint := os.Getenv("AWS_ENDPOINT_URL")
@@ -92,7 +66,28 @@ func NewAWSAdmin(ctx context.Context, logger *zerolog.Logger) (*AWSAdmin, error)
 }
 
 //-----------------------------------------------------------------------------
-// ListAllPoptapeStandardBuckets
+// LocalStackResolver
+//-----------------------------------------------------------------------------
+
+// LocalStackResolver provides a custom endpoint for AWS SDK.
+type LocalStackResolver struct {
+	Endpoint string
+}
+
+// Implements aws.EndpointResolverWithOptions for v1.39.2
+func (r LocalStackResolver) ResolveEndpoint(service, region string, options ...interface{}) (aws.Endpoint, error) {
+	if r.Endpoint != "" {
+		return aws.Endpoint{
+			URL:               r.Endpoint,
+			SigningRegion:     region,
+			HostnameImmutable: true, // For S3 compatibility
+		}, nil
+	}
+	return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+}
+
+//-----------------------------------------------------------------------------
+// TestConnection
 //-----------------------------------------------------------------------------
 
 func (aw *AWSAdmin) TestConnection(ctx context.Context) error {
@@ -359,7 +354,8 @@ func (aw *AWSAdmin) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucke
 	var filtered []s3types.Bucket
 	for _, b := range out.Buckets {
 		if b.Name != nil && strings.HasPrefix(*b.Name, "psb-") {
-			*b.BucketArn = "arn:aws:s3:::" + *b.Name
+			arn := "arn:aws:s3:::" + *b.Name
+			b.BucketArn = &arn
 			filtered = append(filtered, b)
 		}
 	}

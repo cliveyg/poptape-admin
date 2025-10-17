@@ -134,15 +134,15 @@ func (a *App) MigrateModels() {
 
 	a.Log.Debug().Msg("Migrating models")
 
-	err := a.DB.Migrator().AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{}, &User{})
+	err := a.DB.Migrator().AutoMigrate(&Role{}, &Cred{}, &Microservice{}, &SaveRecord{}, &RoleCredMS{})
 	if err != nil {
 		a.Log.Fatal().Msg(err.Error())
 	}
 	// we have to migrate user separately due to dependencies on other models
-	//err = a.DB.AutoMigrate(&User{})
-	//if err != nil {
-	//	a.Log.Fatal().Msg(err.Error())
-	//}
+	err = a.DB.Migrator().AutoMigrate(&User{})
+	if err != nil {
+		a.Log.Fatal().Msg(err.Error())
+	}
 	a.Log.Debug().Msg("Models migrated successfully ✓")
 }
 
