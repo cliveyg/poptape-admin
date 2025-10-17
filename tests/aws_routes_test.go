@@ -273,7 +273,7 @@ func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
 		func(c *gin.Context) {
-			testApp.ListAllPoptapeStandardUsers(c)
+			testApp.ListAllPoptapeStandardBuckets(c)
 		},
 	)
 
@@ -307,7 +307,7 @@ func TestListAllPoptapeStandardBuckets_AWSError_NotDEV(t *testing.T) {
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
 		func(c *gin.Context) {
-			testApp.ListAllPoptapeStandardUsers(c)
+			testApp.ListAllPoptapeStandardBuckets(c)
 		},
 	)
 
