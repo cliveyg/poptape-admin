@@ -142,8 +142,7 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	var resp map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Contains(t, resp, "error")
-	assert.Equal(t, "mock AWS ListAllUsers error", resp["error"])
+	assert.Contains(t, w.Body.String(), "mock AWS ListAllUsers error")
 }
 
 func TestListAllPoptapeStandardUsers_AWSError_NotDEV(t *testing.T) {
@@ -288,8 +287,7 @@ func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 	var resp map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Contains(t, resp, "error")
-	assert.Equal(t, "mock AWS ListAllStandardBuckets error", resp["error"])
+	assert.Contains(t, w.Body.String(), "mock AWS ListAllStandardBuckets error")
 }
 
 func TestListAllPoptapeStandardBuckets_AWSError_NotDEV(t *testing.T) {

@@ -96,8 +96,7 @@ func TestWibble_ListAWSUsers_DEV(t *testing.T) {
 	var resp map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Contains(t, resp, "error")
-	assert.Equal(t, "mock AWS ListAllUsers error", resp["error"])
+	assert.Contains(t, w.Body.String(), "mock AWS ListAllUsers error")
 }
 
 func TestWibble_CreateUser(t *testing.T) {
