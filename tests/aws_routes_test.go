@@ -107,7 +107,6 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 	}
 }
 
-/*
 func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
@@ -120,25 +119,28 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	// Clone TestApp to override AWS and Router only
-	testApp := *TestApp
-	testApp.AWS = &testutils.MockAWSAdminError{}
-	testApp.Router = gin.New()
-
-	// Register the route with real middleware
-	testApp.Router.GET("/admin/aws/users",
-		testApp.AuthMiddleware(false),
-		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
-		func(c *gin.Context) {
-			testApp.ListAllPoptapeStandardUsers(c)
-		},
-	)
+	//// Clone TestApp to override AWS and Router only
+	//testApp := *TestApp
+	//testApp.AWS = &testutils.MockAWSAdminError{}
+	//testApp.Router = gin.New()
+	//
+	//// Register the route with real middleware
+	//testApp.Router.GET("/admin/aws/users",
+	//	testApp.AuthMiddleware(false),
+	//	testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+	//	func(c *gin.Context) {
+	//		testApp.ListAllPoptapeStandardUsers(c)
+	//	},
+	//)
+	origAWS := TestApp.AWS
+	TestApp.AWS = &testutils.MockAWSAdminError{}
+	defer func() { TestApp.AWS = origAWS }()
 
 	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	testApp.Router.ServeHTTP(w, req)
+	TestApp.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	var resp map[string]interface{}
@@ -148,6 +150,7 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	assert.Equal(t, "mock AWS error", resp["error"])
 }
 
+/*
 func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Unsetenv("ENVIRONMENT")
