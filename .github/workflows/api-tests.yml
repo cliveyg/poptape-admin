@@ -121,11 +121,11 @@ jobs:
           UNIT_TESTCOVERAGE_THRESHOLD: 0
         run: |
           echo "Checking unit test coverage is above threshold..."
-          echo "Threshold             : UNIT_TESTCOVERAGE_THRESHOLD %"
+          echo "Threshold             : $UNIT_TESTCOVERAGE_THRESHOLD %"
           unitTotalCoverage=$(go tool cover -func=unit.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
-          echo "Current unit test coverage : unitTotalCoverage %"
+          echo "Current unit test coverage : $unitTotalCoverage %"
           echo "-----------------------------------------------------------"
-          if [ "$(echo "unitTotalCoverage >= UNIT_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+          if [ "$(echo "$unitTotalCoverage >= $UNIT_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
             echo "Unit test coverage passed threshold OK"
           else
             echo "Current unit test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
@@ -169,11 +169,11 @@ jobs:
           INT_TESTCOVERAGE_THRESHOLD: 0
         run: |
           echo "Checking integration test coverage is above threshold..."
-          echo "Threshold             : INT_TESTCOVERAGE_THRESHOLD %"
+          echo "Threshold             : $INT_TESTCOVERAGE_THRESHOLD %"
           intTotalCoverage=$(go tool cover -func=int.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
-          echo "Current integration test coverage : intTotalCoverage %"
+          echo "Current integration test coverage : $intTotalCoverage %"
           echo "-----------------------------------------------------------"
-          if [ "$(echo "$intTotalCoverage >= INT_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+          if [ "$(echo "$intTotalCoverage >= $INT_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
             echo "Integration test coverage passed threshold OK"
           else
             echo "Current integration test coverage is below threshold. Please add more integration tests or adjust threshold to a lower value."
