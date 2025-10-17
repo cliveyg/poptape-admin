@@ -343,24 +343,6 @@ func (aw *AWSAdmin) DeleteBucketCompletely(ctx context.Context, bucketName strin
 // ListAllStandardBuckets
 //-----------------------------------------------------------------------------
 
-//func (aw *AWSAdmin) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
-//	if aw.S3 == nil {
-//		return nil, fmt.Errorf("AWSAdmin.S3 is nil")
-//	}
-//	out, err := aw.S3.ListBuckets(ctx, &s3.ListBucketsInput{})
-//	if err != nil {
-//		return nil, fmt.Errorf("failed to list buckets: %w", err)
-//	}
-//	var filtered []s3types.Bucket
-//	for _, b := range out.Buckets {
-//		if b.Name != nil && strings.HasPrefix(*b.Name, "psb-") {
-//			*b.BucketArn = "arn:aws:s3:::" + *b.Name
-//			filtered = append(filtered, b)
-//		}
-//	}
-//	return filtered, nil
-//}
-
 func (aw *AWSAdmin) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 	if aw.S3 == nil {
 		return nil, fmt.Errorf("AWSAdmin.S3 is nil")
