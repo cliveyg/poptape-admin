@@ -16,18 +16,18 @@ import (
 	"testing"
 )
 
-func newTestAppWithMockAWS() *app.App {
-	return &app.App{
-		Router:        gin.New(),
-		DB:            TestApp.DB,
-		Log:           TestApp.Log,
-		Mongo:         TestApp.Mongo,
-		AWS:           &testutils.MockAWSAdminError{},
-		CommandRunner: TestApp.CommandRunner,
-	}
-}
+//func NewTestAppWithMockAWS() *app.App {
+//	return &app.App{
+//		Router:        gin.New(),
+//		DB:            TestApp.DB,
+//		Log:           TestApp.Log,
+//		Mongo:         TestApp.Mongo,
+//		AWS:           &testutils.MockAWSAdminError{},
+//		CommandRunner: TestApp.CommandRunner,
+//	}
+//}
 
-func TestWibble_ListAWSUsers(t *testing.T) {
+func TestWibble_ListAWSUsers_NotDEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	//os.Setenv("ENVIRONMENT", "DEV")
 	//defer os.Unsetenv("ENVIRONMENT")
@@ -38,9 +38,8 @@ func TestWibble_ListAWSUsers(t *testing.T) {
 	require.NotEmpty(t, superPass)
 
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-	TestApp.Log.Info().Msgf("TOKEN FROM Wibble_ListAWSUsers IS [%s]", token)
 
-	testApp := newTestAppWithMockAWS()
+	testApp := testutils.NewTestAppWithMockAWS(TestApp)
 
 	// Register only the route and middleware you need for this test
 	testApp.Router.GET("/admin/aws/users",
@@ -61,9 +60,44 @@ func TestWibble_ListAWSUsers(t *testing.T) {
 	var resp map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	//assert.Contains(t, resp, "error")
 	assert.Contains(t, w.Body.String(), "oopsy")
-	//assert.Equal(t, "mock AWS error", resp["error"])
+}
+
+func TestWibble_ListAWSUsers_DEV(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	os.Setenv("ENVIRONMENT", "DEV")
+	defer os.Setenv("ENVIRONMENT", "TEST")
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	testApp := testutils.NewTestAppWithMockAWS(TestApp)
+
+	// Register only the route and middleware you need for this test
+	testApp.Router.GET("/admin/aws/users",
+		testApp.AuthMiddleware(false),
+		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+		func(c *gin.Context) {
+			testApp.ListAllPoptapeStandardUsers(c)
+		},
+	)
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "error")
+	assert.Equal(t, "mock AWS ListAllUsers error", resp["error"])
 }
 
 func TestWibble_CreateUser(t *testing.T) {

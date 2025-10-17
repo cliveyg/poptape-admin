@@ -8,6 +8,7 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/awsutil"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
@@ -208,7 +209,7 @@ func (m *MockAWSAdminError) DeleteUserCompletely(ctx context.Context, userName s
 }
 
 func (m *MockAWSAdminError) ListAllUsers(ctx context.Context) ([]iamtypes.User, error) {
-	return nil, fmt.Errorf("mock AWS error")
+	return nil, fmt.Errorf("mock AWS ListAllUsers error")
 }
 
 func (m *MockAWSAdminError) CreateBucket(ctx context.Context, bucketName string) error {
@@ -224,7 +225,7 @@ func (m *MockAWSAdminError) DeleteBucketCompletely(ctx context.Context, bucketNa
 }
 
 func (m *MockAWSAdminError) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
-	return nil, fmt.Errorf("mock AWS error")
+	return nil, fmt.Errorf("mock AWS ListAllStandardBuckets error")
 }
 
 // MakeTestUser returns a valid test user with the "super" role.
@@ -240,5 +241,16 @@ func MakeTestUser() app.User {
 		Created:   time.Now(),
 		Updated:   time.Now(),
 		Deleted:   gorm.DeletedAt{},
+	}
+}
+
+func NewTestAppWithMockAWS(TestApp *app.App) *app.App {
+	return &app.App{
+		Router:        gin.New(),
+		DB:            TestApp.DB,
+		Log:           TestApp.Log,
+		Mongo:         TestApp.Mongo,
+		AWS:           &MockAWSAdminError{},
+		CommandRunner: TestApp.CommandRunner,
 	}
 }
