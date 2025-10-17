@@ -3,6 +3,8 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -107,6 +109,17 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 	}
 }
 
+func newTestAppWithMockAWS() *app.App {
+	return &app.App{
+		Router:        gin.New(),
+		DB:            TestApp.DB,
+		Log:           TestApp.Log,
+		Mongo:         TestApp.Mongo,
+		AWS:           &testutils.MockAWSAdminError{},
+		CommandRunner: TestApp.CommandRunner,
+	}
+}
+
 func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
@@ -119,28 +132,22 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	//// Clone TestApp to override AWS and Router only
-	//testApp := *TestApp
-	//testApp.AWS = &testutils.MockAWSAdminError{}
-	//testApp.Router = gin.New()
-	//
-	//// Register the route with real middleware
-	//testApp.Router.GET("/admin/aws/users",
-	//	testApp.AuthMiddleware(false),
-	//	testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
-	//	func(c *gin.Context) {
-	//		testApp.ListAllPoptapeStandardUsers(c)
-	//	},
-	//)
-	origAWS := TestApp.AWS
-	TestApp.AWS = &testutils.MockAWSAdminError{}
-	defer func() { TestApp.AWS = origAWS }()
+	testApp := newTestAppWithMockAWS()
+
+	// Register only the route and middleware you need for this test
+	testApp.Router.GET("/admin/aws/users",
+		testApp.AuthMiddleware(false),
+		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+		func(c *gin.Context) {
+			testApp.ListAllPoptapeStandardUsers(c)
+		},
+	)
 
 	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	TestApp.Router.ServeHTTP(w, req)
+	testApp.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	var resp map[string]interface{}
@@ -149,6 +156,46 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	assert.Contains(t, resp, "error")
 	assert.Equal(t, "mock AWS error", resp["error"])
 }
+
+//func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
+//	testutils.ResetPostgresDB(t, TestApp)
+//	os.Setenv("ENVIRONMENT", "DEV")
+//	defer os.Unsetenv("ENVIRONMENT")
+//
+//	superUser := os.Getenv("SUPERUSER")
+//	superPass := os.Getenv("SUPERPASS")
+//	require.NotEmpty(t, superUser)
+//	require.NotEmpty(t, superPass)
+//
+//	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+//
+//	//// Clone TestApp to override AWS and Router only
+//	//testApp := *TestApp
+//	//testApp.AWS = &testutils.MockAWSAdminError{}
+//	//testApp.Router = gin.New()
+//	//
+//	//// Register the route with real middleware
+//	//testApp.Router.GET("/admin/aws/users",
+//	//	testApp.AuthMiddleware(false),
+//	//	testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+//	//	func(c *gin.Context) {
+//	//		testApp.ListAllPoptapeStandardUsers(c)
+//	//	},
+//	//)
+//
+//	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
+//	req.Header.Set("y-access-token", token)
+//	req.Header.Set("Content-Type", "application/json")
+//	w := httptest.NewRecorder()
+//	TestApp.Router.ServeHTTP(w, req)
+//
+//	assert.Equal(t, http.StatusInternalServerError, w.Code)
+//	var resp map[string]interface{}
+//	err := json.Unmarshal(w.Body.Bytes(), &resp)
+//	assert.NoError(t, err)
+//	assert.Contains(t, resp, "error")
+//	assert.Equal(t, "mock AWS error", resp["error"])
+//}
 
 /*
 func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
