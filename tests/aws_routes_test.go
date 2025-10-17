@@ -3,6 +3,9 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/cliveyg/poptape-admin/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -109,28 +112,35 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	os.Setenv("ENVIRONMENT", "DEV")
 	defer os.Unsetenv("ENVIRONMENT")
 
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	require.NotEmpty(t, superUser)
-	require.NotEmpty(t, superPass)
+	user := testutils.MakeTestUser()
+	token, err := utils.GenerateToken(user.Username, user.AdminId)
+	require.NoError(t, err)
 
-	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+	testApp := &app.App{
+		AWS:    &testutils.MockAWSAdminError{},
+		Log:    TestApp.Log,
+		Router: gin.New(),
+	}
 
-	// Create a fresh App with the mock AWSAdmin that always errors
-	testApp := *TestApp
-	testApp.AWS = &testutils.MockAWSAdminError{}
+	// Register route using exported middleware and inject user
+	testApp.Router.GET("/admin/aws/users",
+		testApp.AuthMiddleware(false),
+		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+		func(c *gin.Context) {
+			c.Set("user", user)
+			testApp.ListAllPoptapeStandardUsers(c)
+		},
+	)
 
 	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
 	testApp.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
 	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Contains(t, resp, "error")
 	assert.Equal(t, "mock AWS error", resp["error"])
@@ -139,28 +149,34 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	os.Unsetenv("ENVIRONMENT")
 
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	require.NotEmpty(t, superUser)
-	require.NotEmpty(t, superPass)
+	user := testutils.MakeTestUser()
+	token, err := utils.GenerateToken(user.Username, user.AdminId)
+	require.NoError(t, err)
 
-	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+	testApp := &app.App{
+		AWS:    &testutils.MockAWSAdminError{},
+		Log:    TestApp.Log,
+		Router: gin.New(),
+	}
 
-	// Create a fresh App with the mock AWSAdmin that always errors
-	testApp := *TestApp
-	testApp.AWS = &testutils.MockAWSAdminError{}
+	testApp.Router.GET("/admin/aws/users",
+		testApp.AuthMiddleware(false),
+		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+		func(c *gin.Context) {
+			c.Set("user", user)
+			testApp.ListAllPoptapeStandardUsers(c)
+		},
+	)
 
 	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
 	req.Header.Set("y-access-token", token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
 	testApp.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
 	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Contains(t, resp, "message")
 	assert.Equal(t, "oopsy", resp["message"])

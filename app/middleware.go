@@ -39,10 +39,10 @@ func (a *App) auditMiddleware() gin.HandlerFunc {
 }
 
 //-----------------------------------------------------------------------------
-// authMiddleware
+// AuthMiddleware
 //-----------------------------------------------------------------------------
 
-func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
+func (a *App) AuthMiddleware(msExists bool) gin.HandlerFunc {
 
 	// msExists controls if we add the role for the microservice being called
 	// to the allowed roles before we check against the user. this enables us
@@ -102,10 +102,10 @@ func (a *App) authMiddleware(msExists bool) gin.HandlerFunc {
 }
 
 //-----------------------------------------------------------------------------
-// accessControlMiddleware
+// AccessControlMiddleware
 //-----------------------------------------------------------------------------
 
-func (a *App) accessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
+func (a *App) AccessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		var i interface{}

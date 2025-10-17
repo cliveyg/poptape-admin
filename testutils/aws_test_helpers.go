@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/cliveyg/poptape-admin/app"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"log"
 	"os"
 	"time"
@@ -167,4 +170,20 @@ func (m *MockAWSAdminError) DeleteBucketCompletely(ctx context.Context, bucketNa
 
 func (m *MockAWSAdminError) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 	return nil, nil
+}
+
+// MakeTestUser returns a valid test user with the "super" role.
+func MakeTestUser() app.User {
+	return app.User{
+		AdminId:   uuid.New(),
+		Username:  "testsuper",
+		Password:  []byte("password"),
+		LastLogin: time.Now(),
+		Active:    true,
+		Validated: true,
+		Roles:     []app.Role{{Name: "super"}},
+		Created:   time.Now(),
+		Updated:   time.Now(),
+		Deleted:   gorm.DeletedAt{},
+	}
 }
