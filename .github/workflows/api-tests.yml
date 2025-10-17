@@ -10,7 +10,7 @@ on:
     - cron: '0 10 * * 1' # run "At 10:00 on Monday"
 
 jobs:
-  unit-tests:
+  api-tests:
     name: Run api tests
     runs-on: ubuntu-latest
     container:
@@ -47,6 +47,25 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+        env:
+          SERVICES: s3,iam # Add more services as needed
+          DEBUG: 1
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+
     steps:
       - name: Install ca certs dependency
         run: |
