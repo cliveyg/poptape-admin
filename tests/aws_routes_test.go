@@ -181,3 +181,150 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	assert.Contains(t, resp, "message")
 	assert.Equal(t, "oopsy", resp["message"])
 }
+
+func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
+	ctx := context.Background()
+	s3Client := testutils.GetAWSS3Client(ctx)
+
+	testutils.ClearAllS3Buckets(ctx, s3Client)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// 2 standard, 2 non-standard
+	bucketsToSeed := []string{
+		"psb-standard-1",
+		"psb-standard-2",
+		"other-bucket-1",
+		"misc-bucket-2",
+	}
+	cleanup := testutils.SeedS3Buckets(ctx, s3Client, bucketsToSeed)
+	defer cleanup()
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/buckets", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(2), resp["no_of_buckets"])
+
+	// Optionally check returned buckets' names if response is []map[string]interface{}
+	// (depends on how handler marshals s3types.Bucket to JSON)
+}
+
+func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
+	ctx := context.Background()
+	s3Client := testutils.GetAWSS3Client(ctx)
+
+	testutils.ClearAllS3Buckets(ctx, s3Client)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	bucketsToSeed := []string{
+		"other-bucket-1",
+		"misc-bucket-2",
+	}
+	cleanup := testutils.SeedS3Buckets(ctx, s3Client, bucketsToSeed)
+	defer cleanup()
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/buckets", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(0), resp["no_of_buckets"])
+}
+
+func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
+	os.Setenv("ENVIRONMENT", "DEV")
+	defer os.Unsetenv("ENVIRONMENT")
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	testApp := *TestApp
+	testApp.AWS = &testutils.MockAWSAdminError{}
+	testApp.Router = gin.New()
+
+	testApp.Router.GET("/admin/aws/buckets",
+		testApp.AuthMiddleware(false),
+		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+		func(c *gin.Context) {
+			testApp.ListAllPoptapeStandardBuckets(c)
+		},
+	)
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/buckets", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "error")
+	assert.Equal(t, "mock AWS error", resp["error"])
+}
+
+func TestListAllPoptapeStandardBuckets_AWSError_Prod(t *testing.T) {
+	os.Unsetenv("ENVIRONMENT")
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	testApp := *TestApp
+	testApp.AWS = &testutils.MockAWSAdminError{}
+	testApp.Router = gin.New()
+
+	testApp.Router.GET("/admin/aws/buckets",
+		testApp.AuthMiddleware(false),
+		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
+		func(c *gin.Context) {
+			testApp.ListAllPoptapeStandardBuckets(c)
+		},
+	)
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/buckets", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "message")
+	assert.Equal(t, "oopsy", resp["message"])
+}
