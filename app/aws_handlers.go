@@ -41,10 +41,6 @@ func (a *App) ListAllPoptapeStandardUsers(c *gin.Context) {
 	users, err := a.AWS.ListAllUsers(ctx)
 	if err != nil {
 		a.Log.Info().Msgf("Error listing AWS users [%s]", err.Error())
-		if os.Getenv("ENVIRONMENT") == "DEV" {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "oopsy"})
 		return
 	}
