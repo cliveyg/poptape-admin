@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"encoding/json"
-	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -116,13 +115,12 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	token, err := utils.GenerateToken(user.Username, user.AdminId)
 	require.NoError(t, err)
 
-	testApp := &app.App{
-		AWS:    &testutils.MockAWSAdminError{},
-		Log:    TestApp.Log,
-		Router: gin.New(),
-	}
+	// Clone the fully initialized TestApp for integration test, override AWS and Router.
+	testApp := *TestApp
+	testApp.AWS = &testutils.MockAWSAdminError{}
+	testApp.Router = gin.New()
 
-	// Register route using exported middleware and inject user
+	// Register the route using exported middleware and inject user
 	testApp.Router.GET("/admin/aws/users",
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
@@ -153,11 +151,10 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	token, err := utils.GenerateToken(user.Username, user.AdminId)
 	require.NoError(t, err)
 
-	testApp := &app.App{
-		AWS:    &testutils.MockAWSAdminError{},
-		Log:    TestApp.Log,
-		Router: gin.New(),
-	}
+	// Clone the fully initialized TestApp for integration test, override AWS and Router.
+	testApp := *TestApp
+	testApp.AWS = &testutils.MockAWSAdminError{}
+	testApp.Router = gin.New()
 
 	testApp.Router.GET("/admin/aws/users",
 		testApp.AuthMiddleware(false),
