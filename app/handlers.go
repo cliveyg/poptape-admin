@@ -597,11 +597,11 @@ func (a *App) prepSaveRestore(c *gin.Context, dbName, tabColl, mode *string, cre
 
 	// we should already have the msId and credId from the auth/access middleware
 	var credId uuid.UUID
-	if err := a.getUUIDFromParams(c, &credId, "cred_id"); err != nil {
+	if err := a.GetUUIDFromParams(c, &credId, "cred_id"); err != nil {
 		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
 		return http.StatusBadRequest, errors.New("Error getting uuid from cred param")
 	}
-	if err := a.getUUIDFromParams(c, msId, "ms_id"); err != nil {
+	if err := a.GetUUIDFromParams(c, msId, "ms_id"); err != nil {
 		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
 		return http.StatusBadRequest, errors.New("Error getting uuid from ms param")
 	}
@@ -703,7 +703,7 @@ func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
 
 	var msId uuid.UUID
 	// can ignore possible errors as this gets checked in middleware too
-	_ = a.getUUIDFromParams(c, &msId, "ms_id")
+	_ = a.GetUUIDFromParams(c, &msId, "ms_id")
 
 	var saves []SaveRecord
 	var res *gorm.DB // <- Use *gorm.DB, not DBInterface

@@ -27,10 +27,10 @@ type YHeader struct {
 }
 
 //-----------------------------------------------------------------------------
-// getUUIDFromParams
+// GetUUIDFromParams
 //-----------------------------------------------------------------------------
 
-func (a *App) getUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error {
+func (a *App) GetUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error {
 
 	var err error
 	idAny, _ := c.Get(key)
