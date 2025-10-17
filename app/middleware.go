@@ -53,7 +53,10 @@ func (a *App) AuthMiddleware(msExists bool) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
+		a.Log.Info().Msg("IN AuthMiddleware")
+
 		if !a.hasValidJWT(c) {
+			a.Log.Info().Msg("IN AuthMiddleware - INVALID JWT!")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 			return
 		}
