@@ -15,6 +15,7 @@ import (
 )
 
 func TestListAllPoptapeStandardUsers_HappyPath(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
 	iamClient := testutils.GetAWSIAMClient(ctx)
 
@@ -68,6 +69,7 @@ func TestListAllPoptapeStandardUsers_HappyPath(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
 	iamClient := testutils.GetAWSIAMClient(ctx)
 
@@ -107,6 +109,7 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
 	defer os.Unsetenv("ENVIRONMENT")
 
@@ -146,6 +149,7 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	os.Unsetenv("ENVIRONMENT")
 
 	superUser := os.Getenv("SUPERUSER")
@@ -183,6 +187,7 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
 	s3Client := testutils.GetAWSS3Client(ctx)
 
@@ -221,6 +226,7 @@ func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	ctx := context.Background()
 	s3Client := testutils.GetAWSS3Client(ctx)
 
@@ -256,6 +262,7 @@ func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
 	defer os.Unsetenv("ENVIRONMENT")
 
@@ -293,6 +300,7 @@ func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 }
 
 func TestListAllPoptapeStandardBuckets_AWSError_Prod(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
 	os.Unsetenv("ENVIRONMENT")
 
 	superUser := os.Getenv("SUPERUSER")
