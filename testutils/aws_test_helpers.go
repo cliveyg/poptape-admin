@@ -9,6 +9,7 @@ import (
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/awsutil"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 	"log"
 	"os"
@@ -140,8 +141,8 @@ func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]types.User, erro
 
 // GetAWSS3Client returns a real or localstack S3 client for integration tests.
 func GetAWSS3Client(ctx context.Context) *s3.Client {
-	// Match your awsutil.NewAWSAdmin logic for S3 client creation
-	aw, err := awsutil.NewAWSAdmin(ctx, nil)
+	logger := zerolog.New(os.Stdout)
+	aw, err := awsutil.NewAWSAdmin(ctx, &logger)
 	if err != nil {
 		panic(err)
 	}

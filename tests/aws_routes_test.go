@@ -186,7 +186,8 @@ func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	s3Client := testutils.GetAWSS3Client(ctx)
 
-	testutils.ClearAllS3Buckets(ctx, s3Client)
+	err := testutils.ClearAllS3Buckets(ctx, s3Client)
+	require.NoError(t, err)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -214,19 +215,17 @@ func TestListAllPoptapeStandardBuckets_HappyPath(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Equal(t, float64(2), resp["no_of_buckets"])
-
-	// Optionally check returned buckets' names if response is []map[string]interface{}
-	// (depends on how handler marshals s3types.Bucket to JSON)
 }
 
 func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
 	ctx := context.Background()
 	s3Client := testutils.GetAWSS3Client(ctx)
 
-	testutils.ClearAllS3Buckets(ctx, s3Client)
+	err := testutils.ClearAllS3Buckets(ctx, s3Client)
+	require.NoError(t, err)
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
@@ -251,7 +250,7 @@ func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Equal(t, float64(0), resp["no_of_buckets"])
 }
