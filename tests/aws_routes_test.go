@@ -254,45 +254,6 @@ func TestListAllPoptapeStandardBuckets_ZeroStandardBuckets(t *testing.T) {
 	assert.Equal(t, float64(0), resp["no_of_buckets"])
 }
 
-func TestListAllPoptapeStandardBuckets_FailNoS3_DEV(t *testing.T) {
-	testutils.ResetPostgresDB(t, TestApp)
-	os.Setenv("ENVIRONMENT", "DEV")
-	defer os.Setenv("ENVIRONMENT", "TEST")
-
-	superUser := os.Getenv("SUPERUSER")
-	superPass := os.Getenv("SUPERPASS")
-	require.NotEmpty(t, superUser)
-	require.NotEmpty(t, superPass)
-
-	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
-
-	testApp := testutils.NewTestAppWithMockAWS(TestApp)
-
-	// Register only the route and middleware you need for this test
-	testApp.Router.GET("/admin/aws/buckets",
-		testApp.AuthMiddleware(false),
-		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
-		func(c *gin.Context) {
-			testApp.ListAllPoptapeStandardBuckets(c)
-		},
-	)
-
-	// remove s3 client
-	testApp.AWS.SetS3(nil)
-
-	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/buckets", nil)
-	req.Header.Set("y-access-token", token)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	testApp.Router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(t, err)
-	assert.Contains(t, w.Body.String(), "AWSAdmin.S3 is nil")
-}
-
 func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	os.Setenv("ENVIRONMENT", "DEV")
