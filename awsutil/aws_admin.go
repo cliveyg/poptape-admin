@@ -2,6 +2,7 @@ package awsutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -33,6 +34,7 @@ type AWSAdminInterface interface {
 	EmptyBucket(ctx context.Context, bucketName string) error
 	DeleteBucketCompletely(ctx context.Context, bucketName string) error
 	ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error)
+	SetS3(client *s3.Client)
 }
 
 //-----------------------------------------------------------------------------
@@ -63,6 +65,10 @@ func NewAWSAdmin(ctx context.Context, logger *zerolog.Logger) (*AWSAdmin, error)
 		S3:  s3.NewFromConfig(cfg),
 		Log: logger,
 	}, nil
+}
+
+func (aw *AWSAdmin) SetS3(client *s3.Client) {
+	aw.S3 = client
 }
 
 //-----------------------------------------------------------------------------
@@ -345,7 +351,7 @@ func (aw *AWSAdmin) DeleteBucketCompletely(ctx context.Context, bucketName strin
 
 func (aw *AWSAdmin) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 	if aw.S3 == nil {
-		return nil, fmt.Errorf("AWSAdmin.S3 is nil")
+		return nil, errors.New("AWSAdmin.S3 is nil")
 	}
 	out, err := aw.S3.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
