@@ -276,9 +276,9 @@ func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 
 	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
 
-	testApp := *TestApp
-	testApp.AWS = &testutils.MockAWSAdminError{}
-	testApp.Router = gin.New()
+	origAWS := TestApp.AWS
+	TestApp.AWS = &testutils.MockAWSAdminError{}
+	defer func() { TestApp.AWS = origAWS }()
 
 	testApp.Router.GET("/admin/aws/buckets",
 		testApp.AuthMiddleware(false),
