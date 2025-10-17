@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"encoding/json"
-	"github.com/cliveyg/poptape-admin/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -111,21 +110,23 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 	os.Setenv("ENVIRONMENT", "DEV")
 	defer os.Unsetenv("ENVIRONMENT")
 
-	user := testutils.MakeTestUser()
-	token, err := utils.GenerateToken(user.Username, user.AdminId)
-	require.NoError(t, err)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
 
-	// Clone the fully initialized TestApp for integration test, override AWS and Router.
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Clone TestApp to override AWS and Router only
 	testApp := *TestApp
 	testApp.AWS = &testutils.MockAWSAdminError{}
 	testApp.Router = gin.New()
 
-	// Register the route using exported middleware and inject user
+	// Register the route with real middleware
 	testApp.Router.GET("/admin/aws/users",
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
 		func(c *gin.Context) {
-			c.Set("user", user)
 			testApp.ListAllPoptapeStandardUsers(c)
 		},
 	)
@@ -138,7 +139,7 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	var resp map[string]interface{}
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Contains(t, resp, "error")
 	assert.Equal(t, "mock AWS error", resp["error"])
@@ -147,11 +148,14 @@ func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
 func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 	os.Unsetenv("ENVIRONMENT")
 
-	user := testutils.MakeTestUser()
-	token, err := utils.GenerateToken(user.Username, user.AdminId)
-	require.NoError(t, err)
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
 
-	// Clone the fully initialized TestApp for integration test, override AWS and Router.
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Clone TestApp to override AWS and Router only
 	testApp := *TestApp
 	testApp.AWS = &testutils.MockAWSAdminError{}
 	testApp.Router = gin.New()
@@ -160,7 +164,6 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
 		func(c *gin.Context) {
-			c.Set("user", user)
 			testApp.ListAllPoptapeStandardUsers(c)
 		},
 	)
@@ -173,7 +176,7 @@ func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	var resp map[string]interface{}
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Contains(t, resp, "message")
 	assert.Equal(t, "oopsy", resp["message"])
