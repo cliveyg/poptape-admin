@@ -269,7 +269,7 @@ func TestListAllPoptapeStandardBuckets_AWSError_DEV(t *testing.T) {
 	testApp := testutils.NewTestAppWithMockAWS(TestApp)
 
 	// Register only the route and middleware you need for this test
-	testApp.Router.GET("/admin/aws/users",
+	testApp.Router.GET("/admin/aws/buckets",
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
 		func(c *gin.Context) {
@@ -303,7 +303,7 @@ func TestListAllPoptapeStandardBuckets_AWSError_NotDEV(t *testing.T) {
 	testApp := testutils.NewTestAppWithMockAWS(TestApp)
 
 	// Register only the route and middleware you need for this test
-	testApp.Router.GET("/admin/aws/users",
+	testApp.Router.GET("/admin/aws/buckets",
 		testApp.AuthMiddleware(false),
 		testApp.AccessControlMiddleware([]string{"super", "admin", "aws"}),
 		func(c *gin.Context) {
