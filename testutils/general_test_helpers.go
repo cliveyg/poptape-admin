@@ -29,7 +29,7 @@ func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	testApp.Router.ServeHTTP(w, req)
-	testApp.Log.Info().Msgf("%%%%%%% ret code is [%d]", w.Code)
+	testApp.Log.Info().Msgf("^^^^^^^^^^^^^^ ret code is [%d]", w.Code)
 	if w.Code != http.StatusOK {
 		t.Fatalf("login should return 200, got %d", w.Code)
 	}
@@ -40,11 +40,11 @@ func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string)
 	if err := json.NewDecoder(w.Body).Decode(&out); err != nil {
 		t.Fatalf("failed to decode login response: %v", err)
 	}
-	testApp.Log.Info().Msg("%%%%%%% DECODED OK")
+	testApp.Log.Info().Msg("^^^^^^^^^^^^^^ DECODED OK")
 	if out.Token == "" {
 		t.Fatalf("login returned empty token")
 	}
-	testApp.Log.Info().Msg("%%%%%%% SUD BE RETURNING TOKEN")
+	testApp.Log.Info().Msg("^^^^^^^^^^^^^^ SUD BE RETURNING TOKEN")
 	return out.Token
 }
 

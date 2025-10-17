@@ -29,8 +29,8 @@ func newTestAppWithMockAWS() *app.App {
 
 func TestWibble_ListAWSUsers(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
-	os.Setenv("ENVIRONMENT", "DEV")
-	defer os.Unsetenv("ENVIRONMENT")
+	//os.Setenv("ENVIRONMENT", "DEV")
+	//defer os.Unsetenv("ENVIRONMENT")
 
 	superUser := os.Getenv("SUPERUSER")
 	superPass := os.Getenv("SUPERPASS")
