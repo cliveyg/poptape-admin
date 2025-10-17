@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -154,9 +153,8 @@ func TestBackupMongo_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	dlStream.Close()
 
-	// Use direct relative path for the fixture file
-	fixturePath := filepath.Join("tests", "testutils", "fixtures", "fotos.dump")
-	fixture, err := os.ReadFile(fixturePath)
+	// Direct string path for the fixture file from /tests/integration/
+	fixture, err := os.ReadFile("../../testutils/fixtures/fotos.dump")
 	require.NoError(t, err)
 	require.Equal(t, sha256.Sum256(fixture), sha256.Sum256(buf.Bytes()), "SHA256 of GridFS backup does not match fixture")
 }

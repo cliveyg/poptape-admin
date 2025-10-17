@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -13,7 +14,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/testutils"
@@ -156,11 +156,10 @@ func TestBackupPostgres_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	dlStream.Close()
 
-	// Use direct relative path for the fixture file
-	fixturePath := filepath.Join("tests", "testutils", "fixtures", "reviews.dump")
-	fixture, err := os.ReadFile(fixturePath)
+	// Direct string path for the fixture file from /tests/integration/
+	fixture, err := os.ReadFile("../../testutils/fixtures/reviews.dump")
 	require.NoError(t, err)
-	require.Equal(t, fixture, buf.Bytes(), "GridFS backup does not match fixture")
+	require.Equal(t, sha256.Sum256(fixture), sha256.Sum256(buf.Bytes()), "SHA256 of GridFS backup does not match fixture")
 }
 
 //func TestBackupPostgres_HappyPath(t *testing.T) {
