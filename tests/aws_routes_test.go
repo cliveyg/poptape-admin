@@ -104,3 +104,64 @@ func TestListAllPoptapeStandardUsers_ZeroStandardUsers(t *testing.T) {
 		assert.Len(t, details, 0)
 	}
 }
+
+func TestListAllPoptapeStandardUsers_AWSError_DEV(t *testing.T) {
+	os.Setenv("ENVIRONMENT", "DEV")
+	defer os.Unsetenv("ENVIRONMENT")
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Create a fresh App with the mock AWSAdmin that always errors
+	testApp := *TestApp
+	testApp.AWS = &testutils.MockAWSAdminError{}
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	testApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "error")
+	assert.Equal(t, "mock AWS error", resp["error"])
+}
+
+func TestListAllPoptapeStandardUsers_AWSError_Prod(t *testing.T) {
+	os.Unsetenv("ENVIRONMENT")
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Create a fresh App with the mock AWSAdmin that always errors
+	testApp := *TestApp
+	testApp.AWS = &testutils.MockAWSAdminError{}
+
+	req, _ := http.NewRequest(http.MethodGet, "/admin/aws/users", nil)
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	testApp.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "message")
+	assert.Equal(t, "oopsy", resp["message"])
+}

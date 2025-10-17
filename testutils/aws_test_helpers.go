@@ -2,7 +2,9 @@ package testutils
 
 import (
 	"context"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"log"
 	"os"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
 // GetAWSIAMClient returns a configured IAM client for LocalStack.
@@ -128,4 +131,40 @@ func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]types.User, erro
 		return nil, err
 	}
 	return out.Users, nil
+}
+
+// MockAWSAdminError is a test utility mock for AWSAdminInterface that always returns an error from ListAllUsers.
+// All other interface methods are stubbed out with zero values.
+type MockAWSAdminError struct{}
+
+func (m *MockAWSAdminError) TestConnection(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) CreateUserWithAccessKey(ctx context.Context, userName string) (*iamtypes.AccessKey, error) {
+	return nil, nil
+}
+
+func (m *MockAWSAdminError) DeleteUserCompletely(ctx context.Context, userName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) ListAllUsers(ctx context.Context) ([]iamtypes.User, error) {
+	return nil, fmt.Errorf("mock AWS error")
+}
+
+func (m *MockAWSAdminError) CreateBucket(ctx context.Context, bucketName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) EmptyBucket(ctx context.Context, bucketName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) DeleteBucketCompletely(ctx context.Context, bucketName string) error {
+	return nil
+}
+
+func (m *MockAWSAdminError) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
+	return nil, nil
 }
