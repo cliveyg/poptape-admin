@@ -1,13 +1,12 @@
 package unit
 
 import (
+	"github.com/gin-gonic/gin"
 	"os"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
 func TestMain(m *testing.M) {
-	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.TestMode)
 	os.Exit(m.Run())
 }

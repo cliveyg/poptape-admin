@@ -140,20 +140,32 @@ func (a *App) UserHasValidRole(roles []Role, allowedRoles []string) bool {
 }
 
 //-----------------------------------------------------------------------------
-// encryptCredPass
+// EncryptCredPass
 //-----------------------------------------------------------------------------
 
-func (a *App) encryptCredPass(cr *Cred) error {
+var EncryptCredPass = encryptCredPass
+
+func encryptCredPass(cr *Cred) error {
 	// decode input password, encrypt it and put it back in same field
 	p64, err := base64.StdEncoding.DecodeString(cr.DBPassword)
 	if err != nil {
-		a.Log.Info().Msgf("Base64 decoding failed [%s]", err.Error())
 		return errors.New(fmt.Sprintf("Base64 decoding failed [%s]", err.Error()))
 	}
+
+	var ssk, ssn string
+	ok := false
+	ssk, ok = os.LookupEnv("SUPERSECRETKEY")
+	if !ok || ssk == "" {
+		return errors.New("SUPERSECRETKEY is missing or blank")
+	}
+	ssn, ok = os.LookupEnv("SUPERSECRETNONCE")
+	if !ok || ssn == "" {
+		return errors.New("SUPERSECRETNONCE is missing or blank")
+	}
+
 	var est string
-	est, err = utils.Encrypt(p64, []byte(os.Getenv("SUPERSECRETKEY")), []byte(os.Getenv("SUPERSECRETNONCE")))
+	est, err = utils.Encrypt(p64, []byte(ssk), []byte(ssn))
 	if err != nil {
-		a.Log.Info().Msgf("Encryption failed [%s]", err.Error())
 		return errors.New(fmt.Sprintf("Encryption failed [%s]", err.Error()))
 	}
 	cr.DBPassword = est

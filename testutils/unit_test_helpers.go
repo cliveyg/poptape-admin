@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"bytes"
 	"database/sql"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
 	"io"
+	"net/http"
 	"net/http/httptest"
 )
 
@@ -116,18 +118,33 @@ func CreateTestLogger() *zerolog.Logger {
 	return &logger
 }
 
-func CreateTestGinContextWithUser(user app.User) (*gin.Context, *httptest.ResponseRecorder) {
+func NewTestResponseRecorder() *httptest.ResponseRecorder {
+	return httptest.NewRecorder()
+}
+
+func NewTestGinContext(w *httptest.ResponseRecorder) *gin.Context {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(w)
+	return c
+}
+
+// CreateGinContextWithUser returns a Gin Context and ResponseRecorder with the given user set.
+func CreateGinContextWithUser(user app.User) (*gin.Context, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set("user", user)
 	return c, w
 }
 
-func NewTestResponseRecorder() *httptest.ResponseRecorder {
-	return httptest.NewRecorder()
-}
-
-func NewTestGinContext(w *httptest.ResponseRecorder) *gin.Context {
-	c, _ := gin.CreateTestContext(w)
-	return c
+// NewRewindableRequest creates an *http.Request with a rewindable body
+// suitable for Gin handlers that bind multiple times from the same body.
+func NewRewindableRequest(method, url string, body []byte) *http.Request {
+	req, _ := http.NewRequest(method, url, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	raw := body // preserve the body for GetBody
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(raw)), nil
+	}
+	return req
 }
