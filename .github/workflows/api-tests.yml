@@ -97,18 +97,23 @@ jobs:
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
+      - name: Install gcov2lcov
+        run: go install github.com/jandelgado/gcov2lcov@latest
+
       - name: Set unit and integration test flags
         run: |
           echo "RUN_UNIT_TESTS=true" >> $GITHUB_ENV
           echo "RUN_INT_TESTS=true" >> $GITHUB_ENV
+          touch poptape_admin.log
 
-      # unit tests:
+      ##########################################
+      # unit tests                             #
+      ##########################################
       - name: Run unit tests and generate test coverage file (excluding tests and testutils from coverage report)
         if: env.RUN_UNIT_TESTS == 'true'
         run: |
           set -e
           set -o pipefail
-          touch poptape_admin.log
           # go test -v -cover -coverprofile=unit.cover.out ./tests/unit -run '^TestListAllPoptapeStandardBuckets_FailNoS3_DEV' | tee unit.test.out
           go test -v ./tests/unit -cover -coverpkg=./... -coverprofile=unit.cover.out | tee unit.test.out
           grep -v '/tests/' unit.cover.out | grep -v '/testutils/' > unit.cover.out.filtered
@@ -151,7 +156,29 @@ jobs:
           name: unit-test-coverage-report
           path: unit.coverage.html
 
-      # integration tests:
+      - name: Convert Go unit.cover.out to lcov
+        if: env.RUN_UNIT_TESTS == 'true'
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gcov2lcov -infile unit.cover.out -outfile unit.coverage.lcov
+
+      - name: Prepare unit files for badge
+        if: env.RUN_UNIT_TESTS == 'true'
+        run: |
+          cp unit.coverage.lcov lcov.info
+          cp unit.test.out test.out
+
+      - name: Unit Coverage & Test Badges
+        if: env.RUN_UNIT_TESTS == 'true'
+        uses: gaelgirodon/ci-badges-action@v1
+        with:
+          gist-id: ${{ secrets.UNIT_TEST_GIST_ID }}
+          token: ${{ secrets.GIST_TOKEN }}
+          prefix: unit
+
+      ##########################################
+      # integration tests                      #
+      ##########################################
       - name: Run integration tests and generate test coverage file (excluding tests and testutils from coverage report)
         if: env.RUN_INT_TESTS == 'true'
         run: |
@@ -199,34 +226,11 @@ jobs:
           name: int-test-coverage-report
           path: int.coverage.html
 
-      - name: Install gcov2lcov
-        run: go install github.com/jandelgado/gcov2lcov@latest
-
-      - name: Convert Go unit.cover.out to lcov.info
-        if: env.RUN_UNIT_TESTS == 'true'
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          gcov2lcov -infile unit.cover.out -outfile unit.coverage.lcov
-
-      - name: Convert Go int.cover.out to lcov.info
+      - name: Convert Go int.cover.out to lcov
         if: env.RUN_INT_TESTS == 'true'
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           gcov2lcov -infile int.cover.out -outfile int.coverage.lcov
-
-      - name: Prepare unit files for badge
-        if: env.RUN_UNIT_TESTS == 'true'
-        run: |
-          cp unit.coverage.lcov lcov.info
-          cp unit.test.out test.out
-
-      - name: Unit Coverage & Test Badges
-        if: env.RUN_UNIT_TESTS == 'true'
-        uses: gaelgirodon/ci-badges-action@v1
-        with:
-          gist-id: c9188881d498a3e609cfcf4875845d9f
-          token: ${{ secrets.GIST_TOKEN }}
-          prefix: unit
 
       - name: Prepare int files for badge
         if: env.RUN_INT_TESTS == 'true'
@@ -238,7 +242,7 @@ jobs:
         if: env.RUN_INT_TESTS == 'true'
         uses: gaelgirodon/ci-badges-action@v1
         with:
-          gist-id: c9188881d498a3e609cfcf4875845d9f
+          gist-id: ${{ secrets.INT_TEST_GIST_ID }}
           token: ${{ secrets.GIST_TOKEN }}
           prefix: int
 
