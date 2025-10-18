@@ -1,13 +1,12 @@
 package unit
 
 import (
-	"os"
+	"github.com/cliveyg/poptape-admin/testutils"
 	"testing"
 
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,8 +17,8 @@ func TestGetUUIDFromParams_Success(t *testing.T) {
 	c.Set("user_id", expected.String())
 
 	var actual uuid.UUID
-	logger := zerolog.New(os.Stderr)
-	a := &app.App{Log: &logger}
+	logger := testutils.CreateTestLogger()
+	a := &app.App{Log: logger}
 
 	err := a.GetUUIDFromParams(c, &actual, "user_id")
 	require.NoError(t, err)
@@ -30,8 +29,8 @@ func TestGetUUIDFromParams_MissingKey(t *testing.T) {
 	c, _ := gin.CreateTestContext(nil)
 
 	var actual uuid.UUID
-	logger := zerolog.New(os.Stderr)
-	a := &app.App{Log: &logger}
+	logger := testutils.CreateTestLogger()
+	a := &app.App{Log: logger}
 
 	err := a.GetUUIDFromParams(c, &actual, "user_id")
 	require.Error(t, err)
@@ -44,8 +43,8 @@ func TestGetUUIDFromParams_InvalidUUID(t *testing.T) {
 	c.Set("user_id", "not-a-valid-uuid")
 
 	var actual uuid.UUID
-	logger := zerolog.New(os.Stderr)
-	a := &app.App{Log: &logger}
+	logger := testutils.CreateTestLogger()
+	a := &app.App{Log: logger}
 
 	err := a.GetUUIDFromParams(c, &actual, "user_id")
 	require.Error(t, err)
@@ -58,8 +57,8 @@ func TestGetUUIDFromParams_ValueIsNotString(t *testing.T) {
 	c.Set("user_id", 123456)
 
 	var actual uuid.UUID
-	logger := zerolog.New(os.Stderr)
-	a := &app.App{Log: &logger}
+	logger := testutils.CreateTestLogger()
+	a := &app.App{Log: logger}
 
 	err := a.GetUUIDFromParams(c, &actual, "user_id")
 	require.Error(t, err)

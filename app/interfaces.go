@@ -42,6 +42,10 @@ type GormDB struct {
 	db *gorm.DB
 }
 
+func NewGormDB(db *gorm.DB) *GormDB {
+	return &GormDB{db: db}
+}
+
 func (g *GormDB) First(dest interface{}, conds ...interface{}) *gorm.DB {
 	return g.db.First(dest, conds...)
 }
