@@ -21,6 +21,9 @@ jobs:
       run:
         working-directory: /go/src/github.com/cliveyg/poptape-admin
     services:
+      ##########################################
+      #  set up databases and localstack       #
+      ##########################################
       pdb:
         image: postgres
         env:
@@ -67,6 +70,9 @@ jobs:
       AWS_ENDPOINT_URL: http://localstack:4566
 
     steps:
+      ##########################################
+      #  check out and build go binary         #
+      ##########################################
       - name: Install ca certs dependency
         run: |
           apt-get update && apt-get install --yes --no-install-recommends ca-certificates
@@ -83,7 +89,14 @@ jobs:
         run: |
           go mod tidy
 
-      - name: Run go build
+      - name: Install SQLite build deps
+        run: |
+          apt-get update && apt-get install --yes --no-install-recommends build-essential libsqlite3-dev
+
+      # Sanity check build for prod/container
+      - name: Run go build (CGO disabled for production binary)
+        env:
+          CGO_ENABLED: 0
         run: go build -o /dev/null ./...
 
       - name: Create .env file from github secrets
@@ -100,6 +113,10 @@ jobs:
       - name: Install gcov2lcov
         run: go install github.com/jandelgado/gcov2lcov@latest
 
+      ##########################################
+      #  tests                                 #
+      ##########################################
+
       - name: Set unit and integration test flags
         run: |
           echo "RUN_UNIT_TESTS=true" >> $GITHUB_ENV
@@ -109,12 +126,15 @@ jobs:
       ##########################################
       # unit tests                             #
       ##########################################
+
+      # Enable CGO for unit tests so that GORM+SQLite tests will work!
       - name: Run unit tests and generate test coverage file (excluding tests and testutils from coverage report)
         if: env.RUN_UNIT_TESTS == 'true'
+        env:
+          CGO_ENABLED: 1
         run: |
           set -e
           set -o pipefail
-          # go test -v -cover -coverprofile=unit.cover.out ./tests/unit -run '^TestListAllPoptapeStandardBuckets_FailNoS3_DEV' | tee unit.test.out
           go test -v ./tests/unit -cover -coverpkg=./... -coverprofile=unit.cover.out | tee unit.test.out
           grep -v '/tests/' unit.cover.out | grep -v '/testutils/' > unit.cover.out.filtered
           mv unit.cover.out.filtered unit.cover.out
@@ -179,12 +199,12 @@ jobs:
       ##########################################
       # integration tests                      #
       ##########################################
+
       - name: Run integration tests and generate test coverage file (excluding tests and testutils from coverage report)
         if: env.RUN_INT_TESTS == 'true'
         run: |
           set -e
           set -o pipefail
-          # go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestListAllPoptapeStandardBuckets_FailNoS3_DEV' | tee int.test.out
           go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
           grep -v '/tests/' int.cover.out | grep -v '/testutils/' > int.cover.out.filtered
           mv int.cover.out.filtered int.cover.out
@@ -245,9 +265,3 @@ jobs:
           gist-id: ${{ secrets.INT_TEST_GIST_ID }}
           token: ${{ secrets.GIST_TOKEN }}
           prefix: int
-
-#      - name: Create coverage badges
-#        uses: gaelgirodon/ci-badges-action@v1
-#        with:
-#          gist-id: c9188881d498a3e609cfcf4875845d9f
-#          token: ${{ secrets.GIST_TOKEN }}

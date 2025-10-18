@@ -122,7 +122,7 @@ func (a *App) AccessControlMiddleware(allowedRoles []string) gin.HandlerFunc {
 			allowedRoles = append(allowedRoles, fmt.Sprintf("%v", ir))
 		}
 
-		if !a.userHasValidRole(u.Roles, allowedRoles) {
+		if !a.UserHasValidRole(u.Roles, allowedRoles) {
 			a.Log.Info().Msgf("User [%s] forbidden to use [%s]", u.Username, c.Request.URL)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Forbidden"})
 			return

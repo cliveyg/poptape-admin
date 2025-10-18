@@ -124,10 +124,10 @@ func (a *App) hasValidJWT(c *gin.Context) bool {
 }
 
 //-----------------------------------------------------------------------------
-// userHasValidRole
+// UserHasValidRole
 //-----------------------------------------------------------------------------
 
-func (a *App) userHasValidRole(roles []Role, allowedRoles []string) bool {
+func (a *App) UserHasValidRole(roles []Role, allowedRoles []string) bool {
 
 	rf := false
 	for i := 0; i < len(roles); i++ {
@@ -181,7 +181,7 @@ func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
 	validRoles := []string{"super", "admin"}
 	validRoles = append(validRoles, rcms.RoleName)
 
-	if !a.userHasValidRole(u.Roles, validRoles) {
+	if !a.UserHasValidRole(u.Roles, validRoles) {
 		a.Log.Info().Msgf("User [%s] does not have valid role", u.Username)
 		return http.StatusForbidden, errors.New("Forbidden")
 	}

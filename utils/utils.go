@@ -102,6 +102,10 @@ func generateToken(username string, adminId uuid.UUID) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	secret := os.Getenv("TOKEN_SECRET")
+	if secret == "" {
+		return "", errors.New("TOKEN_SECRET not set")
+	}
 
 	claims := jwt.MapClaims{}
 	claims["username"] = username
@@ -115,7 +119,7 @@ func generateToken(username string, adminId uuid.UUID) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	var rs string
-	rs, err = token.SignedString([]byte(os.Getenv("TOKEN_SECRET")))
+	rs, err = token.SignedString([]byte(secret))
 	if err != nil {
 		return "", err
 	}

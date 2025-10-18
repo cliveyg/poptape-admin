@@ -645,7 +645,7 @@ func (a *App) ListMicroservices(c *gin.Context) {
 		u = value.(User)
 	}
 	a.Log.Info().Interface("User", u).Send()
-	if a.userHasValidRole(u.Roles, []string{"super", "admin"}) {
+	if a.UserHasValidRole(u.Roles, []string{"super", "admin"}) {
 		a.Log.Debug().Msg("User has a valid role")
 	}
 
@@ -675,7 +675,7 @@ func (a *App) ListAllRoles(c *gin.Context) {
 		u = value.(User)
 	}
 	a.Log.Info().Interface("User", u).Send()
-	if a.userHasValidRole(u.Roles, []string{"super", "admin"}) {
+	if a.UserHasValidRole(u.Roles, []string{"super", "admin"}) {
 		a.Log.Debug().Msg("User has a valid role")
 	}
 
