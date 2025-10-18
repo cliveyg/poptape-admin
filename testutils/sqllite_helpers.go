@@ -15,7 +15,7 @@ import (
 func SetupTestAppWithSQLite() (*app.App, *gorm.DB) {
 	// Use the modernc.org/sqlite driver by ensuring it is imported above.
 	// GORM's sqlite driver will detect and use it if CGO is disabled and mattn/go-sqlite3 is not present.
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared&_driver=modernc"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
