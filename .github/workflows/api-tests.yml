@@ -224,7 +224,7 @@ jobs:
         if: env.RUN_UNIT_TESTS == 'true'
         uses: gaelgirodon/ci-badges-action@v1
         with:
-          gist-id: ${{ secrets.GIST_ID }}
+          gist-id: c9188881d498a3e609cfcf4875845d9f
           token: ${{ secrets.GIST_TOKEN }}
           prefix: unit
 
@@ -238,7 +238,7 @@ jobs:
         if: env.RUN_INT_TESTS == 'true'
         uses: gaelgirodon/ci-badges-action@v1
         with:
-          gist-id: ${{ secrets.GIST_ID }}
+          gist-id: c9188881d498a3e609cfcf4875845d9f
           token: ${{ secrets.GIST_TOKEN }}
           prefix: int
 
