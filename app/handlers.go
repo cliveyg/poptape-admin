@@ -104,7 +104,7 @@ func (a *App) CreateCreds(c *gin.Context) {
 		return
 	}
 
-	if err = a.encryptCredPass(&cr); err != nil {
+	if err = EncryptCredPass(&cr); err != nil {
 		a.Log.Info().Msgf("%s", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request [4]"})
 		return
@@ -165,6 +165,7 @@ func (a *App) FetchAllUsers(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
 		a.Log.Error().Err(res.Error)
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }

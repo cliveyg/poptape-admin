@@ -93,7 +93,7 @@ jobs:
         run: |
           apt-get update && apt-get install --yes --no-install-recommends build-essential libsqlite3-dev
 
-      # Sanity check build for prod/container
+      # Sanity check build for prod container
       - name: Run go build (CGO disabled for production binary)
         env:
           CGO_ENABLED: 0

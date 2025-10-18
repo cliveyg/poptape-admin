@@ -158,3 +158,27 @@ func ListAllSavesExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, 
 func UniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, uuid.New().String())
 }
+
+// ExtractJSONResponse unmarshals the body of a ResponseRecorder into a map.
+func ExtractJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
+	var out map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &out)
+	require.NoError(t, err)
+	return out
+}
+
+// RandEncodedPassword returns a base64-encoded password for use in CreateCreds tests.
+func RandEncodedPassword() string {
+	return base64.StdEncoding.EncodeToString([]byte(RandString(12)))
+}
+
+// SetupEncryptPasswordMock replaces app.EncryptCredPass with a mock that always returns a fixed encrypted value.
+// Returns a cleanup function to restore the original after the test.
+func SetupEncryptPasswordMock() func() {
+	original := app.EncryptCredPass
+	app.EncryptCredPass = func(cr *app.Cred) error {
+		cr.DBPassword = "mocked_encrypted_password"
+		return nil
+	}
+	return func() { app.EncryptCredPass = original }
+}
