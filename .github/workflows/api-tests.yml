@@ -214,6 +214,12 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           gcov2lcov -infile int.cover.out -outfile int.coverage.lcov
 
+      - name: Prepare unit files for badge
+        if: env.RUN_UNIT_TESTS == 'true'
+        run: |
+          cp unit.coverage.lcov lcov.info
+          cp unit.test.out test.out
+
       - name: Unit Coverage & Test Badges
         if: env.RUN_UNIT_TESTS == 'true'
         uses: gaelgirodon/ci-badges-action@v1
@@ -221,6 +227,12 @@ jobs:
           gist-id: ${{ secrets.GIST_ID }}
           token: ${{ secrets.GIST_TOKEN }}
           prefix: unit
+
+      - name: Prepare int files for badge
+        if: env.RUN_INT_TESTS == 'true'
+        run: |
+          cp int.coverage.lcov lcov.info
+          cp int.test.out test.out
 
       - name: Integration Coverage & Test Badges
         if: env.RUN_INT_TESTS == 'true'
