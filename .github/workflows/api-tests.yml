@@ -97,60 +97,157 @@ jobs:
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
-      # all tests:
-      - name: Run tests and generate test coverage file (excluding tests and testutils from coverage report)
+      - name: Install gcov2lcov
+        run: go install github.com/jandelgado/gcov2lcov@latest
+
+      - name: Set unit and integration test flags
+        run: |
+          echo "RUN_UNIT_TESTS=true" >> $GITHUB_ENV
+          echo "RUN_INT_TESTS=true" >> $GITHUB_ENV
+          touch poptape_admin.log
+
+      ##########################################
+      # unit tests                             #
+      ##########################################
+      - name: Run unit tests and generate test coverage file (excluding tests and testutils from coverage report)
+        if: env.RUN_UNIT_TESTS == 'true'
         run: |
           set -e
           set -o pipefail
-          touch poptape_admin.log
-          # go test -v -cover -coverprofile=cover.out ./tests -run '^TestListAllPoptapeStandardBuckets_FailNoS3_DEV' | tee test.out
-          go test -v ./... -cover -coverpkg=./... -coverprofile=cover.out | tee test.out
-          grep -v '/tests/' cover.out | grep -v '/testutils/' > cover.out.filtered
-          mv cover.out.filtered cover.out
+          # go test -v -cover -coverprofile=unit.cover.out ./tests/unit -run '^TestListAllPoptapeStandardBuckets_FailNoS3_DEV' | tee unit.test.out
+          go test -v ./tests/unit -cover -coverpkg=./... -coverprofile=unit.cover.out | tee unit.test.out
+          grep -v '/tests/' unit.cover.out | grep -v '/testutils/' > unit.cover.out.filtered
+          mv unit.cover.out.filtered unit.cover.out
         shell: bash
 
-      - name: Check test coverage is above threshold
+      - name: Check unit test coverage is above threshold
+        if: env.RUN_UNIT_TESTS == 'true'
         env:
-          TESTCOVERAGE_THRESHOLD: 0
+          UNIT_TESTCOVERAGE_THRESHOLD: 0
         run: |
-          echo "Checking test coverage is above threshold..."
-          echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
-          totalCoverage=$(go tool cover -func=cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
-          echo "Current test coverage : $totalCoverage %"
+          echo "Checking unit test coverage is above threshold..."
+          echo "Threshold             : $UNIT_TESTCOVERAGE_THRESHOLD %"
+          unitTotalCoverage=$(go tool cover -func=unit.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          echo "Current unit test coverage : $unitTotalCoverage %"
           echo "-----------------------------------------------------------"
-          if [ "$(echo "$totalCoverage >= $TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
-            echo "Coverage passed threshold OK"
+          if [ "$(echo "$unitTotalCoverage >= $UNIT_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "Unit test coverage passed threshold OK"
           else
-            echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
+            echo "Current unit test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
             echo "Failed"
             exit 1
           fi
           echo "-----------------------------------------------------------"
         shell: bash
 
-      - name: Show coverage summary
-        run: go tool cover -func=cover.out
+      - name: Show unit test coverage summary
+        if: env.RUN_UNIT_TESTS == 'true'
+        run: go tool cover -func=unit.cover.out
 
-      - name: Generate HTML coverage report
+      - name: Generate Unit Test HTML coverage report
+        if: env.RUN_UNIT_TESTS == 'true'
         run: |
-          go tool cover -html=cover.out -o coverage.html
+          go tool cover -html=unit.cover.out -o unit.coverage.html
 
-      - name: Upload HTML coverage report
+      - name: Upload Unit Test HTML coverage report
+        if: env.RUN_UNIT_TESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage.html
+          name: unit-test-coverage-report
+          path: unit.coverage.html
 
-      - name: Install gcov2lcov
-        run: go install github.com/jandelgado/gcov2lcov@latest
-
-      - name: Convert Go cover.out to lcov.info
+      - name: Convert Go unit.cover.out to lcov
+        if: env.RUN_UNIT_TESTS == 'true'
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          gcov2lcov -infile cover.out -outfile coverage.lcov
+          gcov2lcov -infile unit.cover.out -outfile unit.coverage.lcov
 
-      - name: Create coverage badges
+      - name: Prepare unit files for badge
+        if: env.RUN_UNIT_TESTS == 'true'
+        run: |
+          cp unit.coverage.lcov lcov.info
+          cp unit.test.out test.out
+
+      - name: Unit Coverage & Test Badges
+        if: env.RUN_UNIT_TESTS == 'true'
         uses: gaelgirodon/ci-badges-action@v1
         with:
-          gist-id: c9188881d498a3e609cfcf4875845d9f
+          gist-id: ${{ secrets.UNIT_TEST_GIST_ID }}
           token: ${{ secrets.GIST_TOKEN }}
+          prefix: unit
+
+      ##########################################
+      # integration tests                      #
+      ##########################################
+      - name: Run integration tests and generate test coverage file (excluding tests and testutils from coverage report)
+        if: env.RUN_INT_TESTS == 'true'
+        run: |
+          set -e
+          set -o pipefail
+          # go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestListAllPoptapeStandardBuckets_FailNoS3_DEV' | tee int.test.out
+          go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
+          grep -v '/tests/' int.cover.out | grep -v '/testutils/' > int.cover.out.filtered
+          mv int.cover.out.filtered int.cover.out
+        shell: bash
+
+      - name: Check integration test coverage is above threshold
+        if: env.RUN_INT_TESTS == 'true'
+        env:
+          INT_TESTCOVERAGE_THRESHOLD: 0
+        run: |
+          echo "Checking integration test coverage is above threshold..."
+          echo "Threshold             : $INT_TESTCOVERAGE_THRESHOLD %"
+          intTotalCoverage=$(go tool cover -func=int.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          echo "Current integration test coverage : $intTotalCoverage %"
+          echo "-----------------------------------------------------------"
+          if [ "$(echo "$intTotalCoverage >= $INT_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "Integration test coverage passed threshold OK"
+          else
+            echo "Current integration test coverage is below threshold. Please add more integration tests or adjust threshold to a lower value."
+            echo "Failed"
+            exit 1
+          fi
+          echo "-----------------------------------------------------------"
+        shell: bash
+
+      - name: Show integration test coverage summary
+        if: env.RUN_INT_TESTS == 'true'
+        run: go tool cover -func=int.cover.out
+
+      - name: Generate Integration HTML coverage report
+        if: env.RUN_INT_TESTS == 'true'
+        run: |
+          go tool cover -html=int.cover.out -o int.coverage.html
+
+      - name: Upload Integration Tests HTML coverage report
+        if: env.RUN_INT_TESTS == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: int-test-coverage-report
+          path: int.coverage.html
+
+      - name: Convert Go int.cover.out to lcov
+        if: env.RUN_INT_TESTS == 'true'
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gcov2lcov -infile int.cover.out -outfile int.coverage.lcov
+
+      - name: Prepare int files for badge
+        if: env.RUN_INT_TESTS == 'true'
+        run: |
+          cp int.coverage.lcov lcov.info
+          cp int.test.out test.out
+
+      - name: Integration Coverage & Test Badges
+        if: env.RUN_INT_TESTS == 'true'
+        uses: gaelgirodon/ci-badges-action@v1
+        with:
+          gist-id: ${{ secrets.INT_TEST_GIST_ID }}
+          token: ${{ secrets.GIST_TOKEN }}
+          prefix: int
+
+#      - name: Create coverage badges
+#        uses: gaelgirodon/ci-badges-action@v1
+#        with:
+#          gist-id: c9188881d498a3e609cfcf4875845d9f
+#          token: ${{ secrets.GIST_TOKEN }}

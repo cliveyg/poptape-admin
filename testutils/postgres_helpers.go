@@ -23,8 +23,6 @@ func ResetPostgresDB(t *testing.T, a *app.App) {
 		"save_records",
 	}
 
-	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-= resetDB =-=-=-=-=-=-=-=-=-=-=-=-=-=-")
-
 	for _, table := range tables {
 		if a.DB.Migrator().HasTable(table) {
 			stmt := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table)
