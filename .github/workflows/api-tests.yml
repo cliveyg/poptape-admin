@@ -130,8 +130,6 @@ jobs:
       # Enable CGO for unit tests so that GORM+SQLite tests will work!
       - name: Run unit tests and generate test coverage file (excluding tests and testutils from coverage report)
         if: env.RUN_UNIT_TESTS == 'true'
-        env:
-          CGO_ENABLED: 1
         run: |
           set -e
           set -o pipefail
