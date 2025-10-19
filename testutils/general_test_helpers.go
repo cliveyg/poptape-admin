@@ -167,11 +167,6 @@ func ExtractJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]
 	return out
 }
 
-// RandEncodedPassword returns a base64-encoded password for use in CreateCreds tests.
-func RandEncodedPassword() string {
-	return base64.StdEncoding.EncodeToString([]byte(RandString(12)))
-}
-
 // SetupEncryptPasswordMock replaces app.EncryptCredPass with a mock that always returns a fixed encrypted value.
 // Returns a cleanup function to restore the original after the test.
 func SetupEncryptPasswordMock() func() {
@@ -181,4 +176,13 @@ func SetupEncryptPasswordMock() func() {
 		return nil
 	}
 	return func() { app.EncryptCredPass = original }
+}
+
+func CreateTestUserBasic(name string) app.User {
+	return app.User{
+		AdminId:   uuid.New(),
+		Username:  name,
+		Active:    true,
+		Validated: true,
+	}
 }

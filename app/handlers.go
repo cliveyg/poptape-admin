@@ -191,7 +191,7 @@ func (a *App) FetchUser(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
-		a.Log.Info().Msgf("Error finding user [%s]", err.Error())
+		a.Log.Info().Msgf("Error finding user [%s]", res.Error.Error())
 		return
 	}
 
@@ -645,7 +645,7 @@ func (a *App) ListMicroservices(c *gin.Context) {
 	if value, exists := c.Get("user"); exists {
 		u = value.(User)
 	}
-	a.Log.Info().Interface("User", u).Send()
+	a.Log.Debug().Interface("User", u).Send()
 	if a.UserHasValidRole(u.Roles, []string{"super", "admin"}) {
 		a.Log.Debug().Msg("User has a valid role")
 	}

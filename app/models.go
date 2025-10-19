@@ -12,7 +12,7 @@ import (
 
 type User struct {
 	AdminId   uuid.UUID      `json:"admin_id" gorm:"type:uuid;primaryKey;"`
-	Username  string         `json:"username" gorm:"unique"`
+	Username  string         `json:"username" binding:"required" gorm:"unique"`
 	Password  []byte         `json:"-"`
 	LastLogin time.Time      `json:"last_login"`
 	Active    bool           `json:"active" binding:"required"`
