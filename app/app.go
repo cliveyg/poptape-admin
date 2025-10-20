@@ -14,6 +14,7 @@ type App struct {
 	Mongo         *mongo.Client
 	AWS           awsutil.AWSAdminInterface
 	CommandRunner CommandRunner
+	Hooks         Hooks // see hooks interface
 }
 
 func (a *App) InitialiseApp() {

@@ -164,3 +164,24 @@ func NewRewindableRequest(method, url string, body []byte) *http.Request {
 	}
 	return req
 }
+
+// MockHooks allows overriding functions for unit testing.
+type MockHooks struct {
+	PrepSaveRestoreFunc func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
+	BackupPostgresFunc  func(args *app.BackupDBArgs) error
+	BackupMongoFunc     func(args *app.BackupDBArgs) error
+}
+
+// functions that can be overridden. must match Hooks interface methods
+
+func (m *MockHooks) PrepSaveRestore(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult {
+	return m.PrepSaveRestoreFunc(args)
+}
+
+func (m *MockHooks) BackupPostgres(args *app.BackupDBArgs) error {
+	return m.BackupPostgresFunc(args)
+}
+
+func (m *MockHooks) BackupMongo(args *app.BackupDBArgs) error {
+	return m.BackupMongoFunc(args)
+}

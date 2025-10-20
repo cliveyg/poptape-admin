@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"os"
@@ -193,4 +194,41 @@ type Metadata struct {
 	SavedCount     int       `json:"saved_count"`
 	ValidCount     int       `json:"valid_count"`
 	InvalidCount   int       `json:"invalid_count"`
+}
+
+//-----------------------------------------------------------------------------
+// structs for PrepSaveRestore input and output
+//-----------------------------------------------------------------------------
+
+type PrepSaveRestoreArgs struct {
+	Ctx     *gin.Context
+	DBName  string
+	TabColl string
+	Mode    string
+}
+
+type PrepSaveRestoreResult struct {
+	StatusCode int
+	Error      error
+	Creds      Cred
+	User       User
+	MSId       uuid.UUID
+	DBName     string
+	TabColl    string
+	Mode       string
+}
+
+//-----------------------------------------------------------------------------
+// struct for BackupDBArgs input
+//-----------------------------------------------------------------------------
+
+type BackupDBArgs struct {
+	Creds        *Cred
+	MsId         *uuid.UUID
+	User         *User
+	DB           string
+	Table        string
+	Mode         string
+	SaveId       *uuid.UUID
+	BytesWritten *int64
 }

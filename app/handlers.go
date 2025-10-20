@@ -490,28 +490,43 @@ func (a *App) Login(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) BackupDB(c *gin.Context) {
-
 	a.Log.Debug().Msg("In BackupDB")
 
 	saveId := uuid.New()
-	var msId uuid.UUID
-	var err error
-	var statusCode int
-	var creds Cred
-	var u User
-	dbName := ""
-	tabColl := ""
-	mode := ""
 
-	statusCode, err = a.prepSaveRestore(c, &dbName, &tabColl, &mode, &creds, &u, &msId)
-	if err != nil {
-		c.JSON(statusCode, gin.H{"message": err.Error()})
+	restoreArgs := &PrepSaveRestoreArgs{
+		Ctx:     c,
+		DBName:  c.Param("db"),
+		TabColl: c.Param("tab"),
+		Mode:    c.Query("mode"),
+	}
+	result := a.Hooks.PrepSaveRestore(restoreArgs)
+	if result.Error != nil {
+		c.JSON(result.StatusCode, gin.H{"message": result.Error.Error()})
 		return
 	}
 
 	var n int64
+	creds := result.Creds
+	msId := result.MSId
+	u := result.User
+	dbName := result.DBName
+	tabColl := result.TabColl
+	mode := result.Mode
+
+	bdba := BackupDBArgs{
+		Creds:        &creds,
+		MsId:         &msId,
+		User:         &u,
+		DB:           dbName,
+		Table:        tabColl,
+		Mode:         mode,
+		SaveId:       &saveId,
+		BytesWritten: &n,
+	}
+
 	if creds.Type == "postgres" {
-		if err = a.backupPostgres(&creds, &msId, &u, dbName, tabColl, mode, &saveId, &n); err != nil {
+		if err := a.Hooks.BackupPostgres(&bdba); err != nil {
 			a.Log.Info().Msgf("Error backing up db [%s]", err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up Postgres"})
 			return
@@ -526,7 +541,7 @@ func (a *App) BackupDB(c *gin.Context) {
 		return
 	}
 	if creds.Type == "mongo" {
-		if err := a.backupMongo(&creds, &msId, &u, dbName, tabColl, mode, &saveId, &n); err != nil {
+		if err := a.Hooks.BackupMongo(&bdba); err != nil {
 			a.Log.Info().Msgf("Error backing up MongoDB [%s]", err.Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop when backing up MongoDB"})
 			return
@@ -542,7 +557,6 @@ func (a *App) BackupDB(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "Something's not right"})
-
 }
 
 //-----------------------------------------------------------------------------
@@ -550,26 +564,27 @@ func (a *App) BackupDB(c *gin.Context) {
 //-----------------------------------------------------------------------------
 
 func (a *App) RestoreDB(c *gin.Context) {
-
 	a.Log.Debug().Msg("In RestoreDB")
-	var msId uuid.UUID
-	var err error
-	var statusCode int
-	var creds Cred
-	var u User
-	dbName := ""
-	tabColl := ""
-	mode := ""
 
-	statusCode, err = a.prepSaveRestore(c, &dbName, &tabColl, &mode, &creds, &u, &msId)
-	if err != nil {
-		c.JSON(statusCode, gin.H{"message": err.Error()})
+	restoreArgs := &PrepSaveRestoreArgs{
+		Ctx:     c,
+		DBName:  c.Param("db"),
+		TabColl: c.Param("tab"),
+		Mode:    c.Query("mode"),
+	}
+	result := a.Hooks.PrepSaveRestore(restoreArgs)
+	if result.Error != nil {
+		c.JSON(result.StatusCode, gin.H{"message": result.Error.Error()})
 		return
 	}
 
+	msId := result.MSId
+	dbName := result.DBName
+	tabColl := result.TabColl
+	mode := result.Mode
+
 	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tab [%s], mode [%s]", msId.String(), dbName, tabColl, mode)
 	c.JSON(http.StatusTeapot, gin.H{"message": "Moop"})
-
 }
 
 //-----------------------------------------------------------------------------
