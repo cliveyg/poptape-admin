@@ -128,6 +128,22 @@ func NewTestGinContext(w *httptest.ResponseRecorder) *gin.Context {
 	return c
 }
 
+// SetupCreateUserGinContext returns a Gin context and response recorder for CreateUser.
+func SetupCreateUserGinContext(body []byte, token string) (*gin.Context, *httptest.ResponseRecorder) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = NewRewindableRequest("POST", "/admin/user", body)
+	c.Set("token", token)
+	return c, w
+}
+
+func SetGinParams(c *gin.Context, aId string, rName string) {
+	c.Params = gin.Params{
+		{Key: "aId", Value: aId},
+		{Key: "rName", Value: rName},
+	}
+}
+
 // CreateGinContextWithUser returns a Gin Context and ResponseRecorder with the given user set.
 func CreateGinContextWithUser(user app.User) (*gin.Context, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.TestMode)

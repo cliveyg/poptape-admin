@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -58,4 +59,70 @@ func MicroserviceRows(mss []app.Microservice) *sqlmock.Rows {
 		rows.AddRow(ms.MicroserviceId, ms.MSName, ms.CreatedBy, created)
 	}
 	return rows
+}
+
+// MockAssociation simulates gorm.Association for testing RemoveRoleFromUser.
+type MockAssociation struct {
+	clearErr error
+}
+
+func NewMockAssociation(clearErr error) *MockAssociation {
+	return &MockAssociation{clearErr: clearErr}
+}
+
+func (m *MockAssociation) Clear() error {
+	return m.clearErr
+}
+
+// ExpectUserCreate sets up sqlmock expectations for a successful user creation.
+func ExpectUserCreate(mock sqlmock.Sqlmock) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO "users"`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+}
+
+// ExpectUserCreateAndSave sets up sqlmock for successful user creation and Save (DEV mode).
+func ExpectUserCreateAndSave(mock sqlmock.Sqlmock) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO "users"`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "users"`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+}
+
+// ExpectUserCreateError sets up sqlmock for user creation error.
+func ExpectUserCreateError(mock sqlmock.Sqlmock) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO "users"`).WillReturnError(errors.New("insert failed"))
+	mock.ExpectRollback()
+}
+
+// ExpectUserCreateAndSaveError sets up sqlmock for Save error after user creation (DEV mode).
+func ExpectUserCreateAndSaveError(mock sqlmock.Sqlmock) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO "users"`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "users"`).WillReturnError(errors.New("save failed"))
+	mock.ExpectRollback()
+}
+
+// SeedAdminRole sets up the mock so the "admin" role exists
+func SeedAdminRole(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT \* FROM "roles" WHERE "roles"."name" = \$1`).
+		WithArgs("admin").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "admin"))
+}
+
+// Simulate the admin role always existing
+func ExpectAdminRoleExists(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT \* FROM "roles" WHERE "roles"."name" = \$1`).
+		WithArgs("admin").
+		WillReturnRows(sqlmock.NewRows([]string{"name", "created"}).AddRow("admin", time.Now()))
+}
+
+// Simulate the user_role join table insert
+func ExpectUserRoleJoin(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(`INSERT INTO "user_role"`).WillReturnResult(sqlmock.NewResult(1, 1))
 }
