@@ -59,6 +59,8 @@ func main() {
 	}
 
 	a := &app.App{}
+	// hooks is here to help unit testing - see hooks interface
+	a.Hooks = a
 	a.Log = setupLogger()
 	a.CommandRunner = &app.RealCommandRunner{}
 

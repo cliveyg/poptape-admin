@@ -159,3 +159,18 @@ func (c *RealCmd) SetEnv(env []string)                { c.cmd.Env = env }
 func (c *RealCmd) SetStdout(w io.Writer)              { c.cmd.Stdout = w }
 func (c *RealCmd) SetStderr(w io.Writer)              { c.cmd.Stderr = w }
 func (c *RealCmd) SetStdin(r io.Reader)               { c.cmd.Stdin = r }
+
+//-----------------------------------------------------------------------------
+// Hooks interface - this is so we can unit test with mocking of functions in
+// here. Any functions you wish to mock must be called with a.Hooks.FunctionName
+// in the app so we can use a TestApp and swap out the function to be mocked.
+// This then enables us to mock Functions for unit tests etc. Bit cludgy but
+// golang doesn't allow monkey patching and this is the least bad option
+//-----------------------------------------------------------------------------
+
+type Hooks interface {
+	PrepSaveRestore(args *PrepSaveRestoreArgs) *PrepSaveRestoreResult
+	BackupPostgres(args *BackupDBArgs) error
+	BackupMongo(args *BackupDBArgs) error
+	// Add more methods you want to mock/test in the future
+}

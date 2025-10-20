@@ -327,129 +327,193 @@ func (a *App) CreateMicroservices(aId uuid.UUID) error {
 }
 
 //-----------------------------------------------------------------------------
-// prepSaveRestore
+// PrepSaveRestore
 //-----------------------------------------------------------------------------
 
-//goland:noinspection GoErrorStringFormat
-func (a *App) prepSaveRestore(c *gin.Context, dbName, tabColl, mode *string, creds *Cred, u *User, msId *uuid.UUID) (int, error) {
+func (a *App) PrepSaveRestore(args *PrepSaveRestoreArgs) *PrepSaveRestoreResult {
+	var creds Cred
+	var user User
+	var msID uuid.UUID
 
-	*mode = c.Query("mode")
+	// Use values from args struct
+	dbName := args.DBName
+	tabColl := args.TabColl
+	mode := args.Mode
+	c := args.Ctx
 
-	vl := []string{"schema", "all", "data"}
-	if !slices.Contains(vl, *mode) {
+	// Validate mode
+	validModes := []string{"schema", "all", "data"}
+	if !slices.Contains(validModes, mode) {
 		a.Log.Info().Msg("Invalid mode value")
-		return http.StatusBadRequest, errors.New("Invalid mode value")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusBadRequest,
+			Error:      errors.New("Invalid mode value"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
 
-	if err := utils.ValidDataInput(c.Param("db")); err != nil {
+	// Validate db and tab input
+	if err := utils.ValidDataInput(dbName); err != nil {
 		a.Log.Info().Msg("Invalid data input for db param")
-		return http.StatusBadRequest, errors.New("Invalid data input for db param")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusBadRequest,
+			Error:      errors.New("Invalid data input for db param"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
-
-	if err := utils.ValidDataInput(c.Param("tab")); err != nil {
+	if err := utils.ValidDataInput(tabColl); err != nil {
 		a.Log.Info().Msg("Invalid data input for table/collection param")
-		return http.StatusBadRequest, errors.New("Invalid data input for table/collection param")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusBadRequest,
+			Error:      errors.New("Invalid data input for table/collection param"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
-	*dbName = c.Param("db")
-	*tabColl = c.Param("tab")
 
-	// we should already have the msId and credId from the auth/access middleware
+	// Get cred_id and ms_id from gin context params
 	var credId uuid.UUID
 	if err := a.GetUUIDFromParams(c, &credId, "cred_id"); err != nil {
 		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		return http.StatusBadRequest, errors.New("Error getting uuid from cred param")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusBadRequest,
+			Error:      errors.New("Error getting uuid from cred param"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
-	if err := a.GetUUIDFromParams(c, msId, "ms_id"); err != nil {
+	if err := a.GetUUIDFromParams(c, &msID, "ms_id"); err != nil {
 		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		return http.StatusBadRequest, errors.New("Error getting uuid from ms param")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusBadRequest,
+			Error:      errors.New("Error getting uuid from ms param"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
 
-	a.Log.Debug().Msgf("Input vars are: credId [%s], db [%s], tabColl [%s], mode [%s]", credId.String(), *dbName, *tabColl, *mode)
+	a.Log.Debug().Msgf("Input vars are: credId [%s], db [%s], tabColl [%s], mode [%s]", credId.String(), dbName, tabColl, mode)
 
+	// Fetch creds record
 	creds.CredId = credId
 	res := a.DB.First(&creds, credId)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			a.Log.Info().Msgf("Creds [%s] not found", credId.String())
-			return http.StatusNotFound, errors.New("Creds not found")
+			return &PrepSaveRestoreResult{
+				StatusCode: http.StatusNotFound,
+				Error:      errors.New("Creds not found"),
+				DBName:     dbName,
+				TabColl:    tabColl,
+				Mode:       mode,
+			}
 		}
 		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
-		return http.StatusInternalServerError, errors.New("Something went pop")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusInternalServerError,
+			Error:      errors.New("Something went pop"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
 
-	if *dbName != creds.DBName {
+	if dbName != creds.DBName {
 		a.Log.Info().Msgf("DB name [%v] is incorrect", dbName)
-		return http.StatusNotFound, errors.New("DB name is invalid")
+		return &PrepSaveRestoreResult{
+			StatusCode: http.StatusNotFound,
+			Error:      errors.New("DB name is invalid"),
+			DBName:     dbName,
+			TabColl:    tabColl,
+			Mode:       mode,
+		}
 	}
 
+	// Get user from gin context
 	var i interface{}
 	i, _ = c.Get("user")
-	*u = i.(User)
+	user = i.(User)
 	// as getting consumes the resource we have to reset it
-	c.Set("user", u)
+	c.Set("user", user)
 
-	return http.StatusOK, nil
+	return &PrepSaveRestoreResult{
+		StatusCode: http.StatusOK,
+		Error:      nil,
+		Creds:      creds,
+		User:       user,
+		MSId:       msID,
+		DBName:     dbName,
+		TabColl:    tabColl,
+		Mode:       mode,
+	}
 }
 
 //-----------------------------------------------------------------------------
-// backupPostgres
+// BackupPostgres
 //-----------------------------------------------------------------------------
 
-func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID, n *int64) error {
-	pw, err := a.decryptPassword(creds.DBPassword)
+func (a *App) BackupPostgres(args *BackupDBArgs) error {
+	pw, err := a.decryptPassword(args.Creds.DBPassword)
 	if err != nil {
 		return err
 	}
 
 	dso := ""
-	if mode == "schema" {
+	if args.Mode == "schema" {
 		dso = "--schema-only"
-	} else if mode == "data" {
+	} else if args.Mode == "data" {
 		dso = "--data-only"
 	}
 
-	args := []string{
-		"-h", creds.Host,
-		"-U", creds.DBUsername,
-		"-p", creds.DBPort,
+	cmdArgs := []string{
+		"-h", args.Creds.Host,
+		"-U", args.Creds.DBUsername,
+		"-p", args.Creds.DBPort,
 	}
-	if table != "" {
-		args = append(args, "-t", table)
+	if args.Table != "" {
+		cmdArgs = append(cmdArgs, "-t", args.Table)
 	}
 	if dso != "" {
-		args = append(args, dso)
+		cmdArgs = append(cmdArgs, dso)
 	}
-	args = append(args, creds.DBName)
-	a.Log.Debug().Msgf("pg_dump args is <<%s>>", args)
+	cmdArgs = append(cmdArgs, args.Creds.DBName)
+	a.Log.Debug().Msgf("pg_dump args is <<%s>>", cmdArgs)
 
 	env := []string{"PGPASSWORD=" + string(pw)}
 	var cmd Cmd
 	var stdout io.ReadCloser
-	cmd, stdout, err = a.setupAndStartCmd("pg_dump", args, env, "pg_dump")
+	cmd, stdout, err = a.setupAndStartCmd("pg_dump", cmdArgs, env, "pg_dump")
 	if err != nil {
 		return err
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("%s_%s.sql", msId.String(), timestamp)
+	filename := fmt.Sprintf("%s_%s.sql", args.MsId.String(), timestamp)
 
 	metadata := map[string]interface{}{
 		"created_at": time.Now(),
-		"created_by": u.AdminId.String(),
-		"save_id":    saveId.String(),
-		"ms_id":      msId.String(),
-		"mode":       mode,
-		"db":         creds.DBName,
-		"table":      table,
+		"created_by": args.User.AdminId.String(),
+		"save_id":    args.SaveId.String(),
+		"ms_id":      args.MsId.String(),
+		"mode":       args.Mode,
+		"db":         args.Creds.DBName,
+		"table":      args.Table,
 	}
 
-	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
+	uploadStream, err := a.createGridFSUploadStream(args.DB, filename, metadata)
 	if err != nil {
 		return err
 	}
 	defer uploadStream.Close()
 
-	*n, err = a.copyToGridFS(uploadStream, stdout, "pg_dump")
+	*args.BytesWritten, err = a.copyToGridFS(uploadStream, stdout, "pg_dump")
 	if err != nil {
 		return err
 	}
@@ -460,70 +524,157 @@ func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, m
 	}
 	a.Log.Debug().Msg("Successfully streamed Postgres dump to GridFS ✓")
 
-	// Create SaveRecord!
 	sr := SaveRecord{
-		SaveId:         *saveId,
-		MicroserviceId: *msId,
-		CredId:         creds.CredId,
-		DBName:         creds.DBName,
-		Table:          table,
-		SavedBy:        u.Username,
-		Version:        0, // will be set by SaveWithAutoVersion
+		SaveId:         *args.SaveId,
+		MicroserviceId: *args.MsId,
+		CredId:         args.Creds.CredId,
+		DBName:         args.Creds.DBName,
+		Table:          args.Table,
+		SavedBy:        args.User.Username,
+		Version:        0,
 		Dataset:        0,
-		Mode:           mode,
+		Mode:           args.Mode,
 		Valid:          true,
-		Type:           creds.Type,
-		Size:           *n,
+		Type:           args.Creds.Type,
+		Size:           *args.BytesWritten,
 	}
 	if err = a.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}
 	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
-
 	return nil
 }
+
+//func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID, n *int64) error {
+//	pw, err := a.decryptPassword(creds.DBPassword)
+//	if err != nil {
+//		return err
+//	}
+//
+//	dso := ""
+//	if mode == "schema" {
+//		dso = "--schema-only"
+//	} else if mode == "data" {
+//		dso = "--data-only"
+//	}
+//
+//	args := []string{
+//		"-h", creds.Host,
+//		"-U", creds.DBUsername,
+//		"-p", creds.DBPort,
+//	}
+//	if table != "" {
+//		args = append(args, "-t", table)
+//	}
+//	if dso != "" {
+//		args = append(args, dso)
+//	}
+//	args = append(args, creds.DBName)
+//	a.Log.Debug().Msgf("pg_dump args is <<%s>>", args)
+//
+//	env := []string{"PGPASSWORD=" + string(pw)}
+//	var cmd Cmd
+//	var stdout io.ReadCloser
+//	cmd, stdout, err = a.setupAndStartCmd("pg_dump", args, env, "pg_dump")
+//	if err != nil {
+//		return err
+//	}
+//
+//	timestamp := time.Now().Format("20060102_150405")
+//	filename := fmt.Sprintf("%s_%s.sql", msId.String(), timestamp)
+//
+//	metadata := map[string]interface{}{
+//		"created_at": time.Now(),
+//		"created_by": u.AdminId.String(),
+//		"save_id":    saveId.String(),
+//		"ms_id":      msId.String(),
+//		"mode":       mode,
+//		"db":         creds.DBName,
+//		"table":      table,
+//	}
+//
+//	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
+//	if err != nil {
+//		return err
+//	}
+//	defer uploadStream.Close()
+//
+//	*n, err = a.copyToGridFS(uploadStream, stdout, "pg_dump")
+//	if err != nil {
+//		return err
+//	}
+//
+//	if err = cmd.Wait(); err != nil {
+//		a.Log.Info().Msgf("pg_dump cmd.Wait error [%s]", err.Error())
+//		return err
+//	}
+//	a.Log.Debug().Msg("Successfully streamed Postgres dump to GridFS ✓")
+//
+//	// Create SaveRecord!
+//	sr := SaveRecord{
+//		SaveId:         *saveId,
+//		MicroserviceId: *msId,
+//		CredId:         creds.CredId,
+//		DBName:         creds.DBName,
+//		Table:          table,
+//		SavedBy:        u.Username,
+//		Version:        0, // will be set by SaveWithAutoVersion
+//		Dataset:        0,
+//		Mode:           mode,
+//		Valid:          true,
+//		Type:           creds.Type,
+//		Size:           *n,
+//	}
+//	if err = a.SaveWithAutoVersion(&sr); err != nil {
+//		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
+//		return err
+//	}
+//	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
+//
+//	return nil
+//}
 
 //-----------------------------------------------------------------------------
 // backupMongo
 //-----------------------------------------------------------------------------
 
-func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection, mode string, saveId *uuid.UUID, n *int64) error {
-	pw, err := a.decryptPassword(creds.DBPassword)
+func (a *App) BackupMongo(args *BackupDBArgs) error {
+	pw, err := a.decryptPassword(args.Creds.DBPassword)
 	if err != nil {
 		return err
 	}
 
-	args := []string{"--archive"}
-	db = creds.DBName // ensure DB name is from creds
+	cmdArgs := []string{"--archive"}
+	db := args.Creds.DBName // ensure DB name is from creds
 
-	if collection != "" {
-		args = append(args, "--collection", collection)
+	if args.Table != "" {
+		cmdArgs = append(cmdArgs, "--collection", args.Table)
 	}
 
 	mus := fmt.Sprintf("--uri=\"mongodb://%s:%s@%s:%s/%s?authSource=%s\"",
-		creds.DBUsername, string(pw), creds.Host, creds.DBPort, creds.DBName, creds.DBName)
-	args = append(args, mus)
-	a.Log.Debug().Msgf("mongodump args is <<%s>>", args)
+		args.Creds.DBUsername, string(pw), args.Creds.Host, args.Creds.DBPort, args.Creds.DBName, args.Creds.DBName)
+	cmdArgs = append(cmdArgs, mus)
+	a.Log.Debug().Msgf("mongodump args is <<%s>>", cmdArgs)
 
 	var cmd Cmd
 	var stdout io.ReadCloser
-	cmd, stdout, err = a.setupAndStartCmd("mongodump", args, nil, "mongodump")
+	cmd, stdout, err = a.setupAndStartCmd("mongodump", cmdArgs, nil, "mongodump")
 	if err != nil {
 		return err
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("%s_%s.archive", msId.String(), timestamp)
+	filename := fmt.Sprintf("%s_%s.archive", args.MsId.String(), timestamp)
 
 	metadata := map[string]interface{}{
 		"created_at": time.Now(),
-		"created_by": u.AdminId.String(),
-		"save_id":    saveId.String(),
-		"ms_id":      msId.String(),
-		"mode":       mode,
-		"db":         creds.DBName,
-		"collection": collection,
+		"created_by": args.User.AdminId.String(),
+		"save_id":    args.SaveId.String(),
+		"ms_id":      args.MsId.String(),
+		"mode":       args.Mode,
+		"db":         args.Creds.DBName,
+		"collection": args.Table,
 	}
 
 	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
@@ -532,7 +683,7 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 	}
 	defer uploadStream.Close()
 
-	*n, err = a.copyToGridFS(uploadStream, stdout, "mongodump")
+	*args.BytesWritten, err = a.copyToGridFS(uploadStream, stdout, "mongodump")
 	if err != nil {
 		return err
 	}
@@ -545,18 +696,18 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 
 	// Create SaveRecord!
 	sr := SaveRecord{
-		SaveId:         *saveId,
-		MicroserviceId: *msId,
-		CredId:         creds.CredId,
-		DBName:         creds.DBName,
-		Table:          collection, // Table = collection for mongo
-		SavedBy:        u.Username,
+		SaveId:         *args.SaveId,
+		MicroserviceId: *args.MsId,
+		CredId:         args.Creds.CredId,
+		DBName:         args.Creds.DBName,
+		Table:          args.Table, // Table = collection for mongo
+		SavedBy:        args.User.Username,
 		Version:        0,
 		Dataset:        0,
-		Mode:           mode,
+		Mode:           args.Mode,
 		Valid:          true,
-		Type:           creds.Type,
-		Size:           *n,
+		Type:           args.Creds.Type,
+		Size:           *args.BytesWritten,
 	}
 	if err = a.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
@@ -566,6 +717,85 @@ func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection,
 
 	return nil
 }
+
+//func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection, mode string, saveId *uuid.UUID, n *int64) error {
+//	pw, err := a.decryptPassword(creds.DBPassword)
+//	if err != nil {
+//		return err
+//	}
+//
+//	args := []string{"--archive"}
+//	db = creds.DBName // ensure DB name is from creds
+//
+//	if collection != "" {
+//		args = append(args, "--collection", collection)
+//	}
+//
+//	mus := fmt.Sprintf("--uri=\"mongodb://%s:%s@%s:%s/%s?authSource=%s\"",
+//		creds.DBUsername, string(pw), creds.Host, creds.DBPort, creds.DBName, creds.DBName)
+//	args = append(args, mus)
+//	a.Log.Debug().Msgf("mongodump args is <<%s>>", args)
+//
+//	var cmd Cmd
+//	var stdout io.ReadCloser
+//	cmd, stdout, err = a.setupAndStartCmd("mongodump", args, nil, "mongodump")
+//	if err != nil {
+//		return err
+//	}
+//
+//	timestamp := time.Now().Format("20060102_150405")
+//	filename := fmt.Sprintf("%s_%s.archive", msId.String(), timestamp)
+//
+//	metadata := map[string]interface{}{
+//		"created_at": time.Now(),
+//		"created_by": u.AdminId.String(),
+//		"save_id":    saveId.String(),
+//		"ms_id":      msId.String(),
+//		"mode":       mode,
+//		"db":         creds.DBName,
+//		"collection": collection,
+//	}
+//
+//	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
+//	if err != nil {
+//		return err
+//	}
+//	defer uploadStream.Close()
+//
+//	*n, err = a.copyToGridFS(uploadStream, stdout, "mongodump")
+//	if err != nil {
+//		return err
+//	}
+//
+//	if err = cmd.Wait(); err != nil {
+//		a.Log.Info().Msgf("mongodump cmd.Wait error [%s]", err.Error())
+//		return err
+//	}
+//	a.Log.Debug().Msg("Successfully streamed MongoDB dump to GridFS ✓")
+//
+//	// Create SaveRecord!
+//	sr := SaveRecord{
+//		SaveId:         *saveId,
+//		MicroserviceId: *msId,
+//		CredId:         creds.CredId,
+//		DBName:         creds.DBName,
+//		Table:          collection, // Table = collection for mongo
+//		SavedBy:        u.Username,
+//		Version:        0,
+//		Dataset:        0,
+//		Mode:           mode,
+//		Valid:          true,
+//		Type:           creds.Type,
+//		Size:           *n,
+//	}
+//	if err = a.SaveWithAutoVersion(&sr); err != nil {
+//		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
+//		return err
+//	}
+//	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
+//
+//	return nil
+//}
 
 //-----------------------------------------------------------------------------
 // RestoreMongo

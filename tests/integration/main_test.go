@@ -22,6 +22,7 @@ func TestMain(m *testing.M) {
 
 	gin.SetMode(gin.ReleaseMode)
 	TestApp = &app.App{}
+	TestApp.Hooks = TestApp
 	TestApp.Log = testutils.SetupLogger()
 	TestApp.CommandRunner = &app.RealCommandRunner{}
 
