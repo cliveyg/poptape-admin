@@ -184,5 +184,22 @@ func CreateTestUserBasic(name string) app.User {
 		Username:  name,
 		Active:    true,
 		Validated: true,
+		Roles:     []app.Role{{Name: "admin"}}, // Always at least one role
+	}
+}
+
+// NewSignupPayload returns a signup payload with password base64 encoded.
+func NewSignupPayload(username, password, confirm string) map[string]string {
+	// Only encode if password is not already encoded
+	encode := func(s string) string {
+		if _, err := base64.StdEncoding.DecodeString(s); err != nil {
+			return base64.StdEncoding.EncodeToString([]byte(s))
+		}
+		return s
+	}
+	return map[string]string{
+		"username":         username,
+		"password":         encode(password),
+		"confirm_password": encode(confirm),
 	}
 }

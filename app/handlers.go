@@ -211,10 +211,12 @@ func (a *App) AddRoleToUser(c *gin.Context) {
 
 	var u User
 	var rName string
-	if err := a.getRoleDetails(c, &u, &rName); err != nil {
+	if err := a.GetRoleDetails(c, &u, &rName); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
 	}
+
+	a.Log.Info().Interface("User: ", u).Send()
 
 	rf := false
 	rls := u.Roles
@@ -224,6 +226,7 @@ func (a *App) AddRoleToUser(c *gin.Context) {
 			break
 		}
 	}
+	a.Log.Info().Msgf("rolefound is [%v]", rf)
 
 	if !rf {
 		rl := Role{Name: rName}
@@ -256,7 +259,7 @@ func (a *App) RemoveRoleFromUser(c *gin.Context) {
 
 	var u User
 	var rName string
-	if err := a.getRoleDetails(c, &u, &rName); err != nil {
+	if err := a.GetRoleDetails(c, &u, &rName); err != nil {
 		a.Log.Info().Msgf("Error is [%s]", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
 		return
@@ -381,7 +384,7 @@ func (a *App) DeleteUser(c *gin.Context) {
 	res := a.DB.Delete(&u)
 	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
-		a.Log.Info().Msgf("Unable to delete user: [%s]", err.Error())
+		a.Log.Info().Msgf("Unable to delete user: [%s]", res.Error.Error())
 		return
 	}
 	a.Log.Info().Msgf("User [%s] deleted", u.AdminId.String())
@@ -435,7 +438,7 @@ func (a *App) CreateUser(c *gin.Context) {
 		res = a.DB.Save(&u)
 		if res.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang [3]"})
-			a.Log.Info().Msgf("Signup failed: [%s]; Unable to validate user [%s]", err.Error(), u.Username)
+			a.Log.Info().Msgf("Signup failed: [%s]; Unable to validate user [%s]", res.Error.Error(), u.Username)
 			return
 		}
 		ms = fmt.Sprintf("User [%s] created and validated; Id is [%s]", u.Username, u.AdminId.String())
@@ -567,71 +570,6 @@ func (a *App) RestoreDB(c *gin.Context) {
 	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tab [%s], mode [%s]", msId.String(), dbName, tabColl, mode)
 	c.JSON(http.StatusTeapot, gin.H{"message": "Moop"})
 
-}
-
-//-----------------------------------------------------------------------------
-// prepSaveRestore
-//-----------------------------------------------------------------------------
-
-//goland:noinspection GoErrorStringFormat
-func (a *App) prepSaveRestore(c *gin.Context, dbName, tabColl, mode *string, creds *Cred, u *User, msId *uuid.UUID) (int, error) {
-
-	*mode = c.Query("mode")
-
-	vl := []string{"schema", "all", "data"}
-	if !slices.Contains(vl, *mode) {
-		a.Log.Info().Msg("Invalid mode value")
-		return http.StatusBadRequest, errors.New("Invalid mode value")
-	}
-
-	if err := utils.ValidDataInput(c.Param("db")); err != nil {
-		a.Log.Info().Msg("Invalid data input for db param")
-		return http.StatusBadRequest, errors.New("Invalid data input for db param")
-	}
-
-	if err := utils.ValidDataInput(c.Param("tab")); err != nil {
-		a.Log.Info().Msg("Invalid data input for table/collection param")
-		return http.StatusBadRequest, errors.New("Invalid data input for table/collection param")
-	}
-	*dbName = c.Param("db")
-	*tabColl = c.Param("tab")
-
-	// we should already have the msId and credId from the auth/access middleware
-	var credId uuid.UUID
-	if err := a.GetUUIDFromParams(c, &credId, "cred_id"); err != nil {
-		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		return http.StatusBadRequest, errors.New("Error getting uuid from cred param")
-	}
-	if err := a.GetUUIDFromParams(c, msId, "ms_id"); err != nil {
-		a.Log.Info().Msgf("Error getting uuid from params [%s]", err.Error())
-		return http.StatusBadRequest, errors.New("Error getting uuid from ms param")
-	}
-
-	a.Log.Debug().Msgf("Input vars are: credId [%s], db [%s], tabColl [%s], mode [%s]", credId.String(), *dbName, *tabColl, *mode)
-
-	creds.CredId = credId
-	res := a.DB.First(&creds, credId)
-	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msgf("Creds [%s] not found", credId.String())
-			return http.StatusNotFound, errors.New("Creds not found")
-		}
-		a.Log.Info().Msgf("Error finding creds [%s]", res.Error.Error())
-		return http.StatusInternalServerError, errors.New("Something went pop")
-	}
-
-	if *dbName != creds.DBName {
-		a.Log.Info().Msgf("DB name [%v] is incorrect", dbName)
-		return http.StatusNotFound, errors.New("DB name is invalid")
-	}
-
-	var i interface{}
-	i, _ = c.Get("user")
-	*u = i.(User)
-	// as getting consumes the resource we have to reset it
-	c.Set("user", u)
-
-	return http.StatusOK, nil
 }
 
 //-----------------------------------------------------------------------------

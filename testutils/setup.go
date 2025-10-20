@@ -30,7 +30,7 @@ func SetupLogger() *zerolog.Logger {
 	}
 
 	logger := zerolog.New(cw).With().Timestamp().Caller().Logger()
-	zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	return &logger
 }
 
