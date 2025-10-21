@@ -660,9 +660,8 @@ func (a *App) ListAllSavesByMicroservice(c *gin.Context) {
 	_ = a.GetUUIDFromParams(c, &msId, "ms_id")
 
 	var saves []SaveRecord
-	var res *gorm.DB // <- Use *gorm.DB, not DBInterface
+	var res *gorm.DB
 
-	// look for querystring valid= if not there then return all valid and invalid records
 	validStr := c.Query("valid")
 	if validStr != "" {
 		vl := []string{"true", "false"}
