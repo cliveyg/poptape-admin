@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"gorm.io/gorm"
 	"io"
@@ -161,11 +162,12 @@ func (c *RealCmd) SetStderr(w io.Writer)              { c.cmd.Stderr = w }
 func (c *RealCmd) SetStdin(r io.Reader)               { c.cmd.Stdin = r }
 
 //-----------------------------------------------------------------------------
-// Hooks interface - this is so we can unit test with mocking of functions in
-// here. Any functions you wish to mock must be called with a.Hooks.FunctionName
+// Hooks interface - this is so we can unit test with mocking of functions.
+// Any functions you wish to mock must be called with a.Hooks.FunctionName
 // in the app so we can use a TestApp and swap out the function to be mocked.
 // This then enables us to mock Functions for unit tests etc. Bit cludgy but
-// golang doesn't allow monkey patching and this is the least bad option
+// golang doesn't allow monkey patching and this is the least bad option. See
+// the testutils unit_test_helpers.go file for actual mocks
 //-----------------------------------------------------------------------------
 
 type Hooks interface {
@@ -175,5 +177,8 @@ type Hooks interface {
 	RestorePostgres(args *RestoreDBArgs) (int, string)
 	RestoreMongo(args *RestoreDBArgs) (int, string)
 	WriteSQLOut(args *WriteSQLArgs) (any, error)
+	WriteMongoOut(args *WriteMongoArgs) (string, error)
+	PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error)
+	DeleteGridFSBySaveID(ctx *context.Context, saveId, DBName string) error
 	// Add more methods you want to mock/test in the future
 }

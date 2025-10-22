@@ -59,7 +59,9 @@ func Encrypt(ptext []byte, key []byte, nonce []byte) (string, error) {
 
 //-----------------------------------------------------------------------------
 
-func Decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
+var Decrypt = decrypt
+
+func decrypt(ciphertext string, key []byte, nonce []byte) ([]byte, error) {
 
 	// base64 decode the string into a byte array and decrypt;
 	// return the decrypted byte array

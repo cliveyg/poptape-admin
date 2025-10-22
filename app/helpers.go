@@ -3,7 +3,6 @@ package app
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -254,7 +253,7 @@ func (a *App) WriteSQLOut(wsa *WriteSQLArgs) (any, error) {
 		"-d", wsa.Creds.DBName,
 		"-Con", wsa.SQLStatement,
 	}
-	if wsa.ReturnTables {
+	if wsa.ListTables {
 		args = append(args, "-A", "-t")
 	}
 	cmd := a.CommandRunner.Command("psql", args...)
@@ -281,37 +280,37 @@ func (a *App) WriteSQLOut(wsa *WriteSQLArgs) (any, error) {
 // WriteMongoOut
 //-----------------------------------------------------------------------------
 
-func (a *App) WriteMongoOut(ctx context.Context, cmdStr string, crdRec *Cred, pw *[]byte) (string, error) {
+func (a *App) WriteMongoOut(args WriteMongoArgs) (string, error) {
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	uri := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=%s",
-		crdRec.DBUsername, string(*pw), crdRec.Host, crdRec.DBPort, crdRec.DBName, crdRec.DBName)
+		args.Creds.DBUsername, string(*args.Password), args.Creds.Host, args.Creds.DBPort, args.Creds.DBName, args.Creds.DBName)
 
 	a.Log.Debug().Msgf("mongo driver URI is <<%s>>", uri)
-	a.Log.Debug().Msgf("WriteMongoOut cmdStr is <<%s>>", cmdStr)
+	a.Log.Debug().Msgf("WriteMongoOut cmdStr is <<%s>>", args.MongoCommand)
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(args.MongoContext, options.Client().ApplyURI(uri))
 	if err != nil {
 		a.Log.Info().Msgf("mongo client connect failed: %s", err.Error())
 		return "", err
 	}
-	defer func() { _ = client.Disconnect(ctx) }()
+	defer func() { _ = client.Disconnect(args.MongoContext) }()
 
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+	if err := client.Ping(args.MongoContext, readpref.Primary()); err != nil {
 		a.Log.Info().Msgf("mongo ping failed: %s", err.Error())
 		return "", err
 	}
 
 	// Handle "drop all collections" pattern
-	if strings.HasPrefix(cmdStr, "db.getCollectionNames().forEach") {
-		collNames, err := client.Database(crdRec.DBName).ListCollectionNames(ctx, map[string]interface{}{})
+	if strings.HasPrefix(args.MongoCommand, "db.getCollectionNames().forEach") {
+		collNames, err := client.Database(args.Creds.DBName).ListCollectionNames(args.MongoContext, map[string]interface{}{})
 		if err != nil {
 			a.Log.Info().Msgf("Failed to list collections: %s", err.Error())
 			return "", err
 		}
 		var dropped int64
 		for _, name := range collNames {
-			err := client.Database(crdRec.DBName).Collection(name).Drop(ctx)
+			err := client.Database(args.Creds.DBName).Collection(name).Drop(args.MongoContext)
 			if err != nil {
 				a.Log.Info().Msgf("Failed to drop collection %s: %s", name, err.Error())
 				stderrBuf.WriteString(fmt.Sprintf("Failed to drop %s: %v\n", name, err))
@@ -326,13 +325,13 @@ func (a *App) WriteMongoOut(ctx context.Context, cmdStr string, crdRec *Cred, pw
 
 	// Handle "db.collection.deleteMany({})" pattern
 	var collectionName string
-	cmdStr = strings.TrimSpace(cmdStr)
-	if strings.HasPrefix(cmdStr, "db.") && strings.Contains(cmdStr, ".deleteMany") {
-		s := strings.TrimPrefix(cmdStr, "db.")
+	args.MongoCommand = strings.TrimSpace(args.MongoCommand)
+	if strings.HasPrefix(args.MongoCommand, "db.") && strings.Contains(args.MongoCommand, ".deleteMany") {
+		s := strings.TrimPrefix(args.MongoCommand, "db.")
 		collectionName = strings.SplitN(s, ".", 2)[0]
 		a.Log.Debug().Msgf("Deleting all documents in collection: %s", collectionName)
-		coll := client.Database(crdRec.DBName).Collection(collectionName)
-		result, err := coll.DeleteMany(ctx, map[string]interface{}{})
+		coll := client.Database(args.Creds.DBName).Collection(collectionName)
+		result, err := coll.DeleteMany(args.MongoContext, map[string]interface{}{})
 		if err != nil {
 			a.Log.Info().Msgf("collection deleteMany failed: %s", err.Error())
 			return "", err
@@ -342,7 +341,7 @@ func (a *App) WriteMongoOut(ctx context.Context, cmdStr string, crdRec *Cred, pw
 	}
 
 	// Unknown or unsupported command pattern
-	stderrBuf.WriteString("Could not parse or execute cmdStr: " + cmdStr)
+	stderrBuf.WriteString("Could not parse or execute cmdStr: " + args.MongoCommand)
 	a.Log.Info().Msg(stderrBuf.String())
 	return "", errors.New(stderrBuf.String())
 }
@@ -358,7 +357,7 @@ func (a *App) ListTables(crd *Cred, pw *[]byte) ([]string, error) {
 		SQLStatement: "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');",
 		Creds:        crd,
 		Password:     pw,
-		ReturnTables: true,
+		ListTables:   true,
 	}
 	out, err := a.Hooks.WriteSQLOut(&wso)
 	if err != nil {
