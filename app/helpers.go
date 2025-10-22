@@ -243,22 +243,22 @@ func (a *App) GetRoleDetails(c *gin.Context, u *User, rName *string) error {
 // WriteSQLOut
 //-----------------------------------------------------------------------------
 
-func (a *App) WriteSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any, error) {
+func (a *App) WriteSQLOut(wsa *WriteSQLArgs) (any, error) {
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	// build psql arguments
 	args := []string{
-		"-h", crdRec.Host,
-		"-U", crdRec.DBUsername,
-		"-p", crdRec.DBPort,
-		"-d", crdRec.DBName,
-		"-Con", cm,
+		"-h", wsa.Creds.Host,
+		"-U", wsa.Creds.DBUsername,
+		"-p", wsa.Creds.DBPort,
+		"-d", wsa.Creds.DBName,
+		"-Con", wsa.SQLStatement,
 	}
-	if tabRet {
+	if wsa.ReturnTables {
 		args = append(args, "-A", "-t")
 	}
 	cmd := a.CommandRunner.Command("psql", args...)
-	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(*pw)))
+	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(*wsa.Password)))
 	a.Log.Debug().Msg("After CommandRunner.Command ✓")
 
 	cmd.SetStdout(&stdoutBuf)
