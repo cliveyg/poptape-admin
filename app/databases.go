@@ -632,7 +632,7 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 // RestoreMongo
 //-----------------------------------------------------------------------------
 
-func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string) {
+func (a *App) RestoreMongo(dba *RestoreDBArgs) (int, string) {
 	var err error
 	var stdoutBuf, stderrBuf bytes.Buffer
 
