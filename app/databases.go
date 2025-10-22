@@ -632,13 +632,7 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 // RestoreMongo
 //-----------------------------------------------------------------------------
 
-func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string, error) {
-	//	c *gin.Context,
-	//	svRec *SaveRecord,
-	//	crdRec *Cred,
-	//	pw *[]byte,
-	//	downloadStream *gridfs.DownloadStream,
-	//) {
+func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string) {
 	var err error
 	var stdoutBuf, stderrBuf bytes.Buffer
 
@@ -648,15 +642,16 @@ func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string, error) {
 			dropCmd := fmt.Sprintf("db.%s.drop()", dba.Save.Table)
 			_, err = a.WriteMongoOut(*dba.MongoContext, dropCmd, dba.Creds, dba.Password)
 			if err != nil {
-				return http.StatusInternalServerError, "Failed to drop collection before restore", err
-
+				a.Log.Info().Msgf("Error writing mongo out [%s]", err.Error())
+				return http.StatusInternalServerError, "Failed to drop collection before restore"
 			}
 			a.Log.Debug().Msgf("Dropped collection [%s]", dba.Save.Table)
 		} else {
 			dropCmd := `db.getCollectionNames().forEach(function(Con){db[Con].drop();})`
 			_, err = a.WriteMongoOut(*dba.MongoContext, dropCmd, dba.Creds, dba.Password)
 			if err != nil {
-				return http.StatusInternalServerError, "Failed to drop all collections before restore", err
+				a.Log.Info().Msgf("Error writing mongo out [%s]", err.Error())
+				return http.StatusInternalServerError, "Failed to drop all collections before restore"
 			}
 			a.Log.Debug().Msg("Dropped all collections")
 		}
@@ -686,13 +681,13 @@ func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string, error) {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		a.Log.Info().Msgf("Error getting StdinPipe for mongorestore: %s", err.Error())
-		return http.StatusInternalServerError, "Error preparing mongorestore", err
+		return http.StatusInternalServerError, "Error preparing mongorestore"
 	}
 	defer stdin.Close()
 
 	if err = cmd.Start(); err != nil {
 		a.Log.Info().Msgf("Error starting mongorestore: %s", err.Error())
-		return http.StatusInternalServerError, "Error starting mongorestore", err
+		return http.StatusInternalServerError, "Error starting mongorestore"
 	}
 	a.Log.Debug().Msg("Started mongorestore ✓")
 
@@ -701,7 +696,7 @@ func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string, error) {
 	a.Log.Debug().Msgf("Copied %d bytes from GridFS to mongorestore stdin", n)
 	if err != nil {
 		a.Log.Info().Msgf("Error streaming to mongorestore: %s", err.Error())
-		return http.StatusInternalServerError, "Error streaming to mongorestore", err
+		return http.StatusInternalServerError, "Error streaming to mongorestore"
 	}
 	a.Log.Debug().Msg("Closed stdin ✓")
 
@@ -709,12 +704,11 @@ func (a *App) RestoreMongo(dba RestoreDBArgs) (int, string, error) {
 		a.Log.Info().Msgf("mongorestore failed: %s", err.Error())
 		a.Log.Info().Msgf("stdout: %s", stdoutBuf.String())
 		a.Log.Info().Msgf("stderr: %s", stderrBuf.String())
-		return http.StatusInternalServerError, "mongorestore failed", err
-
+		return http.StatusInternalServerError, "mongorestore failed"
 	}
 	a.Log.Debug().Msg("mongorestore completed successfully ✓")
 
-	return http.StatusOK, "Mongo restore succeeded!", nil
+	return http.StatusOK, "Mongo restore succeeded!"
 }
 
 //-----------------------------------------------------------------------------
