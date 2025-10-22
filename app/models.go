@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"gorm.io/gorm"
 	"os"
 	"time"
@@ -219,7 +221,7 @@ type PrepSaveRestoreResult struct {
 }
 
 //-----------------------------------------------------------------------------
-// struct for BackupDBArgs input
+// inout struct for BackupDB functions
 //-----------------------------------------------------------------------------
 
 type BackupDBArgs struct {
@@ -231,4 +233,27 @@ type BackupDBArgs struct {
 	Mode         string
 	SaveId       *uuid.UUID
 	BytesWritten *int64
+}
+
+//-----------------------------------------------------------------------------
+// input struct for RestoreDB functions
+//-----------------------------------------------------------------------------
+
+type RestoreDBArgs struct {
+	Save           *SaveRecord
+	Creds          *Cred
+	Password       *[]byte
+	DownloadStream *gridfs.DownloadStream
+	MongoContext   *context.Context
+}
+
+//-----------------------------------------------------------------------------
+// input struct for WriteSQLOut functions
+//-----------------------------------------------------------------------------
+
+type WriteSQLArgs struct {
+	SQLStatement string
+	Creds        *Cred
+	Password     *[]byte
+	ReturnTables bool
 }

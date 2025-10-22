@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -105,4 +106,19 @@ func SaveRecordRows(saves []app.SaveRecord) *sqlmock.Rows {
 		)
 	}
 	return rows
+}
+
+const UserQueryRegex = `SELECT \* FROM "users" WHERE username = \$1 AND "users"\."deleted" IS NULL ORDER BY "users"\."admin_id" LIMIT \$2`
+const UserRoleQueryRegex = `SELECT \* FROM "user_role" WHERE "user_role"\."user_admin_id" = \$1`
+const RolesQueryRegex = `SELECT \* FROM "roles" WHERE "roles"\."name" = \$1`
+
+func SetupJWTEnv() func() {
+	origSecret := os.Getenv("TOKEN_SECRET")
+	origLifespan := os.Getenv("TOKEN_LIFESPAN")
+	os.Setenv("TOKEN_SECRET", "supersecret")
+	os.Setenv("TOKEN_LIFESPAN", "60")
+	return func() {
+		os.Setenv("TOKEN_SECRET", origSecret)
+		os.Setenv("TOKEN_LIFESPAN", origLifespan)
+	}
 }

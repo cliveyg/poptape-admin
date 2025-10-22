@@ -39,10 +39,10 @@ func (a *App) InitialiseRoutes() {
 		a.RemoveRoleFromUser(c)
 	})
 
-	// edit users
-	a.Router.PUT("/admin/user/:aId", a.AuthMiddleware(false), a.AccessControlMiddleware([]string{"super"}), func(c *gin.Context) {
-		a.EditUser(c)
-	})
+	//// edit users
+	//a.Router.PUT("/admin/user/:aId", a.AuthMiddleware(false), a.AccessControlMiddleware([]string{"super"}), func(Con *gin.Context) {
+	//	a.EditUser(Con)
+	//})
 
 	// delete user
 	a.Router.DELETE("/admin/user/:aId", a.AuthMiddleware(false), a.AccessControlMiddleware([]string{"super"}), func(c *gin.Context) {

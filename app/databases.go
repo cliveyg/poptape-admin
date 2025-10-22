@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -546,95 +545,6 @@ func (a *App) BackupPostgres(args *BackupDBArgs) error {
 	return nil
 }
 
-//func (a *App) backupPostgres(creds *Cred, msId *uuid.UUID, u *User, db, table, mode string, saveId *uuid.UUID, n *int64) error {
-//	pw, err := a.decryptPassword(creds.DBPassword)
-//	if err != nil {
-//		return err
-//	}
-//
-//	dso := ""
-//	if mode == "schema" {
-//		dso = "--schema-only"
-//	} else if mode == "data" {
-//		dso = "--data-only"
-//	}
-//
-//	args := []string{
-//		"-h", creds.Host,
-//		"-U", creds.DBUsername,
-//		"-p", creds.DBPort,
-//	}
-//	if table != "" {
-//		args = append(args, "-t", table)
-//	}
-//	if dso != "" {
-//		args = append(args, dso)
-//	}
-//	args = append(args, creds.DBName)
-//	a.Log.Debug().Msgf("pg_dump args is <<%s>>", args)
-//
-//	env := []string{"PGPASSWORD=" + string(pw)}
-//	var cmd Cmd
-//	var stdout io.ReadCloser
-//	cmd, stdout, err = a.setupAndStartCmd("pg_dump", args, env, "pg_dump")
-//	if err != nil {
-//		return err
-//	}
-//
-//	timestamp := time.Now().Format("20060102_150405")
-//	filename := fmt.Sprintf("%s_%s.sql", msId.String(), timestamp)
-//
-//	metadata := map[string]interface{}{
-//		"created_at": time.Now(),
-//		"created_by": u.AdminId.String(),
-//		"save_id":    saveId.String(),
-//		"ms_id":      msId.String(),
-//		"mode":       mode,
-//		"db":         creds.DBName,
-//		"table":      table,
-//	}
-//
-//	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
-//	if err != nil {
-//		return err
-//	}
-//	defer uploadStream.Close()
-//
-//	*n, err = a.copyToGridFS(uploadStream, stdout, "pg_dump")
-//	if err != nil {
-//		return err
-//	}
-//
-//	if err = cmd.Wait(); err != nil {
-//		a.Log.Info().Msgf("pg_dump cmd.Wait error [%s]", err.Error())
-//		return err
-//	}
-//	a.Log.Debug().Msg("Successfully streamed Postgres dump to GridFS ✓")
-//
-//	// Create SaveRecord!
-//	sr := SaveRecord{
-//		SaveId:         *saveId,
-//		MicroserviceId: *msId,
-//		CredId:         creds.CredId,
-//		DBName:         creds.DBName,
-//		Table:          table,
-//		SavedBy:        u.Username,
-//		Version:        0, // will be set by SaveWithAutoVersion
-//		Dataset:        0,
-//		Mode:           mode,
-//		Valid:          true,
-//		Type:           creds.Type,
-//		Size:           *n,
-//	}
-//	if err = a.SaveWithAutoVersion(&sr); err != nil {
-//		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
-//		return err
-//	}
-//	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
-//
-//	return nil
-//}
-
 //-----------------------------------------------------------------------------
 // backupMongo
 //-----------------------------------------------------------------------------
@@ -718,115 +628,30 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 	return nil
 }
 
-//func (a *App) backupMongo(creds *Cred, msId *uuid.UUID, u *User, db, collection, mode string, saveId *uuid.UUID, n *int64) error {
-//	pw, err := a.decryptPassword(creds.DBPassword)
-//	if err != nil {
-//		return err
-//	}
-//
-//	args := []string{"--archive"}
-//	db = creds.DBName // ensure DB name is from creds
-//
-//	if collection != "" {
-//		args = append(args, "--collection", collection)
-//	}
-//
-//	mus := fmt.Sprintf("--uri=\"mongodb://%s:%s@%s:%s/%s?authSource=%s\"",
-//		creds.DBUsername, string(pw), creds.Host, creds.DBPort, creds.DBName, creds.DBName)
-//	args = append(args, mus)
-//	a.Log.Debug().Msgf("mongodump args is <<%s>>", args)
-//
-//	var cmd Cmd
-//	var stdout io.ReadCloser
-//	cmd, stdout, err = a.setupAndStartCmd("mongodump", args, nil, "mongodump")
-//	if err != nil {
-//		return err
-//	}
-//
-//	timestamp := time.Now().Format("20060102_150405")
-//	filename := fmt.Sprintf("%s_%s.archive", msId.String(), timestamp)
-//
-//	metadata := map[string]interface{}{
-//		"created_at": time.Now(),
-//		"created_by": u.AdminId.String(),
-//		"save_id":    saveId.String(),
-//		"ms_id":      msId.String(),
-//		"mode":       mode,
-//		"db":         creds.DBName,
-//		"collection": collection,
-//	}
-//
-//	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
-//	if err != nil {
-//		return err
-//	}
-//	defer uploadStream.Close()
-//
-//	*n, err = a.copyToGridFS(uploadStream, stdout, "mongodump")
-//	if err != nil {
-//		return err
-//	}
-//
-//	if err = cmd.Wait(); err != nil {
-//		a.Log.Info().Msgf("mongodump cmd.Wait error [%s]", err.Error())
-//		return err
-//	}
-//	a.Log.Debug().Msg("Successfully streamed MongoDB dump to GridFS ✓")
-//
-//	// Create SaveRecord!
-//	sr := SaveRecord{
-//		SaveId:         *saveId,
-//		MicroserviceId: *msId,
-//		CredId:         creds.CredId,
-//		DBName:         creds.DBName,
-//		Table:          collection, // Table = collection for mongo
-//		SavedBy:        u.Username,
-//		Version:        0,
-//		Dataset:        0,
-//		Mode:           mode,
-//		Valid:          true,
-//		Type:           creds.Type,
-//		Size:           *n,
-//	}
-//	if err = a.SaveWithAutoVersion(&sr); err != nil {
-//		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
-//		return err
-//	}
-//	a.Log.Debug().Msg("Successfully inserted SaveRecord ✓")
-//
-//	return nil
-//}
-
 //-----------------------------------------------------------------------------
 // RestoreMongo
 //-----------------------------------------------------------------------------
 
-func (a *App) RestoreMongo(
-	c *gin.Context,
-	svRec *SaveRecord,
-	crdRec *Cred,
-	pw *[]byte,
-	downloadStream *gridfs.DownloadStream,
-) {
+func (a *App) RestoreMongo(dba *RestoreDBArgs) (int, string) {
 	var err error
 	var stdoutBuf, stderrBuf bytes.Buffer
 
-	// Drop logic using writeMongoOut, like writeSQLOut for Postgres
-	if svRec.Mode == "schema" || svRec.Mode == "all" {
-		if svRec.Table != "" {
-			dropCmd := fmt.Sprintf("db.%s.drop()", svRec.Table)
-			_, err = a.writeMongoOut(c, dropCmd, crdRec, pw)
+	// Drop logic using WriteMongoOut, like WriteSQLOut for Postgres
+	if dba.Save.Mode == "schema" || dba.Save.Mode == "all" {
+		if dba.Save.Table != "" {
+			dropCmd := fmt.Sprintf("db.%s.drop()", dba.Save.Table)
+			_, err = a.WriteMongoOut(*dba.MongoContext, dropCmd, dba.Creds, dba.Password)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop collection before restore"})
-				return
+				a.Log.Info().Msgf("Error writing mongo out [%s]", err.Error())
+				return http.StatusInternalServerError, "Failed to drop collection before restore"
 			}
-			a.Log.Debug().Msgf("Dropped collection [%s]", svRec.Table)
+			a.Log.Debug().Msgf("Dropped collection [%s]", dba.Save.Table)
 		} else {
-			dropCmd := `db.getCollectionNames().forEach(function(c){db[c].drop();})`
-			_, err = a.writeMongoOut(c, dropCmd, crdRec, pw)
+			dropCmd := `db.getCollectionNames().forEach(function(Con){db[Con].drop();})`
+			_, err = a.WriteMongoOut(*dba.MongoContext, dropCmd, dba.Creds, dba.Password)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop all collections before restore"})
-				return
+				a.Log.Info().Msgf("Error writing mongo out [%s]", err.Error())
+				return http.StatusInternalServerError, "Failed to drop all collections before restore"
 			}
 			a.Log.Debug().Msg("Dropped all collections")
 		}
@@ -835,18 +660,18 @@ func (a *App) RestoreMongo(
 	// Prepare mongorestore as before
 	uri := fmt.Sprintf(
 		"mongodb://%s:%s@%s:%s/%s?authSource=%s",
-		crdRec.DBUsername,
-		string(*pw),
-		crdRec.Host,
-		crdRec.DBPort,
-		crdRec.DBName,
-		crdRec.DBName,
+		dba.Creds.DBUsername,
+		string(*dba.Password),
+		dba.Creds.Host,
+		dba.Creds.DBPort,
+		dba.Creds.DBName,
+		dba.Creds.DBName,
 	)
 
 	args := []string{"--uri=" + uri, "--archive"}
-	if svRec.Table != "" {
+	if dba.Save.Table != "" {
 		//	args = append(args, "--nsInclude", fmt.Sprintf("%s.%s", crdRec.DBName, svRec.Table))
-		args = append(args, "--nsInclude="+fmt.Sprintf("%s.%s", crdRec.DBName, svRec.Table))
+		args = append(args, "--nsInclude="+fmt.Sprintf("%s.%s", dba.Creds.DBName, dba.Save.Table))
 	}
 	a.Log.Debug().Msgf("mongorestore args: %v", args)
 
@@ -856,119 +681,114 @@ func (a *App) RestoreMongo(
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		a.Log.Info().Msgf("Error getting StdinPipe for mongorestore: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error preparing mongorestore"})
-		return
+		return http.StatusInternalServerError, "Error preparing mongorestore"
 	}
 	defer stdin.Close()
 
 	if err = cmd.Start(); err != nil {
 		a.Log.Info().Msgf("Error starting mongorestore: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error starting mongorestore"})
-		return
+		return http.StatusInternalServerError, "Error starting mongorestore"
 	}
 	a.Log.Debug().Msg("Started mongorestore ✓")
 
-	n, err := io.Copy(stdin, downloadStream)
+	n, err := io.Copy(stdin, dba.DownloadStream)
 	stdin.Close()
 	a.Log.Debug().Msgf("Copied %d bytes from GridFS to mongorestore stdin", n)
 	if err != nil {
 		a.Log.Info().Msgf("Error streaming to mongorestore: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming to mongorestore"})
-		return
+		return http.StatusInternalServerError, "Error streaming to mongorestore"
 	}
 	a.Log.Debug().Msg("Closed stdin ✓")
 
 	if err = cmd.Wait(); err != nil {
 		a.Log.Info().Msgf("mongorestore failed: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "mongorestore failed",
-			"stderr":  stderrBuf.String(),
-			"stdout":  stdoutBuf.String(),
-		})
-		return
+		a.Log.Info().Msgf("stdout: %s", stdoutBuf.String())
+		a.Log.Info().Msgf("stderr: %s", stderrBuf.String())
+		return http.StatusInternalServerError, "mongorestore failed"
 	}
 	a.Log.Debug().Msg("mongorestore completed successfully ✓")
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "Mongo restore succeeded!",
-		"stderr":   stderrBuf.String(),
-		"stdout":   stdoutBuf.String(),
-		"save_rec": svRec,
-	})
+
+	return http.StatusOK, "Mongo restore succeeded!"
 }
 
 //-----------------------------------------------------------------------------
 // RestorePostgres
 //-----------------------------------------------------------------------------
 
-func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, pw *[]byte, downloadStream *gridfs.DownloadStream) {
+func (a *App) RestorePostgres(DbArgs *RestoreDBArgs) (int, string) {
 
 	var err error
 	var stdoutBuf, stderrBuf bytes.Buffer
 
+	wso := WriteSQLArgs{
+		SQLStatement: "",
+		Creds:        DbArgs.Creds,
+		Password:     DbArgs.Password,
+		ReturnTables: false,
+	}
+
 	// Drop/delete logic based on svRec.Mode
-	if svRec.Mode == "schema" || svRec.Mode == "all" {
-		if svRec.Table != "" {
-			dc := fmt.Sprintf("DROP TABLE %s", svRec.Table)
-			_, err = a.writeSQLOut(dc, crdRec, pw, false)
+	if DbArgs.Save.Mode == "schema" || DbArgs.Save.Mode == "all" {
+		if DbArgs.Save.Table != "" {
+			wso.SQLStatement = fmt.Sprintf("DROP TABLE %s", DbArgs.Save.Table)
+			_, err = a.Hooks.WriteSQLOut(&wso)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-				return
+				return http.StatusInternalServerError, "Something went plink"
 			} else {
-				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", svRec.Table)
+				a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", DbArgs.Save.Table)
 			}
 		} else {
 			// TODO: Refactor this
 			var tabs []string
-			tabs, err = a.listTables(crdRec, pw)
+			tabs, err = a.ListTables(DbArgs.Creds, DbArgs.Password)
 			if err != nil {
 				a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went scree"})
-				return
+				return http.StatusInternalServerError, "Something went scree"
 			}
 			for _, table := range tabs {
 				a.Log.Debug().Msgf("Table is [%s]", table)
-				dc := fmt.Sprintf("DROP TABLE %s CASCADE", table)
-				_, err = a.writeSQLOut(dc, crdRec, pw, false)
+				wso.SQLStatement = fmt.Sprintf("DROP TABLE %s CASCADE", table)
+				_, err = a.Hooks.WriteSQLOut(&wso)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-					return
+					a.Log.Info().Msgf("Error: [%s]", err.Error())
+					return http.StatusInternalServerError, "Something went twang"
 				} else {
 					a.Log.Debug().Msgf("Successfully dropped table [%s] ✓", table)
 				}
 			}
 		}
-	} else if svRec.Mode == "data" {
-		if svRec.Table != "" {
-			dc := fmt.Sprintf("DELETE FROM %s;", svRec.Table)
-			_, err = a.writeSQLOut(dc, crdRec, pw, false)
+	} else if DbArgs.Save.Mode == "data" {
+		if DbArgs.Save.Table != "" {
+			wso.SQLStatement = fmt.Sprintf("DELETE FROM %s;", DbArgs.Save.Table)
+			_, err = a.Hooks.WriteSQLOut(&wso)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went plink"})
-				return
+				a.Log.Info().Msgf("Error: [%s]", err.Error())
+				return http.StatusInternalServerError, "Something went kerplunk"
 			} else {
-				a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", svRec.Table)
+				a.Log.Debug().Msgf("Successfully deleted data from table [%s] ✓", DbArgs.Save.Table)
 			}
 		} else {
 			var sc int
-			sc, err = a.PostgresDeleteAllRecs(crdRec, pw)
+			sc, err = a.PostgresDeleteAllRecs(DbArgs.Creds, DbArgs.Password)
 			if err != nil {
-				c.JSON(sc, gin.H{"message": err.Error()})
-				return
+				a.Log.Info().Msgf("Error: [%s]", err.Error())
+				return sc, "Something went splat"
 			}
 		}
 	}
 
 	// build psql arguments
 	args := []string{
-		"-h", crdRec.Host,
-		"-U", crdRec.DBUsername,
-		"-p", crdRec.DBPort,
-		"-d", crdRec.DBName,
+		"-h", DbArgs.Creds.Host,
+		"-U", DbArgs.Creds.DBUsername,
+		"-p", DbArgs.Creds.DBPort,
+		"-d", DbArgs.Creds.DBName,
 		"-f", "-",
 		"-v", "ON_ERROR_STOP=1",
 	}
 	a.Log.Debug().Msgf("args is <<%s>>", args)
 	cmd := a.CommandRunner.Command("psql", args...)
-	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(*pw)))
+	cmd.SetEnv(append(os.Environ(), "PGPASSWORD="+string(*DbArgs.Password)))
 	a.Log.Debug().Msg("After CommandRunner.Command ✓")
 
 	cmd.SetStdout(&stdoutBuf)
@@ -977,43 +797,32 @@ func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, p
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		a.Log.Info().Msgf("WriteCloser error [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went ping"})
-		return
+		return http.StatusInternalServerError, "Something went donk"
 	}
 	defer stdin.Close()
 	a.Log.Debug().Msg("After defer stdin.Close ✓")
 
 	if err = cmd.Start(); err != nil {
 		a.Log.Info().Msgf("cmd.Start error [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went twang"})
-		return
+		return http.StatusInternalServerError, "Something went twong"
 	}
 	a.Log.Debug().Msg("After cmd.Start ✓")
 
-	_, err = io.Copy(stdin, downloadStream)
+	_, err = io.Copy(stdin, DbArgs.DownloadStream)
 	if err != nil {
 		a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went splash"})
-		return
+		return http.StatusInternalServerError, "Something went splash"
 	}
 	stdin.Close()
 	a.Log.Debug().Msg("After stdin.Close ✓")
 
 	if err = cmd.Wait(); err != nil {
-		a.Log.Debug().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "psql failed",
-			"stderr":  stderrBuf.String(),
-			"stdout":  stdoutBuf.String(),
-		})
-		return
+		a.Log.Info().Msgf("psql failed: %s\nstderr: %s\nstdout: %s", err.Error(), stderrBuf.String(), stdoutBuf.String())
+		return http.StatusInternalServerError, "psql failed"
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "Postgres restore succeeded!",
-		"stderr":   stderrBuf.String(),
-		"stdout":   stdoutBuf.String(),
-		"save_rec": svRec,
-	})
+	a.Log.Debug().Msgf("stderr: [%s]", stderrBuf.String())
+	a.Log.Debug().Msgf("stdout: [%s]", stdoutBuf.String())
+	return http.StatusOK, "Postgres restore succeeded!"
 }
 
 //-----------------------------------------------------------------------------
@@ -1023,15 +832,20 @@ func (a *App) RestorePostgres(c *gin.Context, svRec *SaveRecord, crdRec *Cred, p
 func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 
 	//var tabs []string
-	tabs, err := a.listTables(crd, pw)
+	tabs, err := a.ListTables(crd, pw)
 	if err != nil {
 		a.Log.Info().Msgf("Error listing tables [%s]", err.Error())
 		return http.StatusInternalServerError, errors.New("error listing tables")
 	}
 	for _, table := range tabs {
 		a.Log.Debug().Msgf("Table is [%s]", table)
-		dc := fmt.Sprintf("DELETE FROM %s;", table)
-		_, err = a.writeSQLOut(dc, crd, pw, false)
+		wso := WriteSQLArgs{
+			SQLStatement: fmt.Sprintf("DELETE FROM %s;", table),
+			Creds:        crd,
+			Password:     pw,
+			ReturnTables: false,
+		}
+		_, err = a.Hooks.WriteSQLOut(&wso)
 		if err != nil {
 			return http.StatusInternalServerError, err
 		} else {

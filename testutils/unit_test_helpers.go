@@ -169,7 +169,10 @@ func NewRewindableRequest(method, url string, body []byte) *http.Request {
 type MockHooks struct {
 	PrepSaveRestoreFunc func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
 	BackupPostgresFunc  func(args *app.BackupDBArgs) error
+	RestorePostgresFunc func(args *app.RestoreDBArgs) (int, string)
 	BackupMongoFunc     func(args *app.BackupDBArgs) error
+	RestoreMongoFunc    func(args *app.RestoreDBArgs) (int, string)
+	WriteSQLOutFunc     func(args *app.WriteSQLArgs) (any, error)
 }
 
 // functions that can be overridden. must match Hooks interface methods
@@ -182,6 +185,18 @@ func (m *MockHooks) BackupPostgres(args *app.BackupDBArgs) error {
 	return m.BackupPostgresFunc(args)
 }
 
+func (m *MockHooks) RestorePostgres(args *app.RestoreDBArgs) (int, string) {
+	return m.RestorePostgresFunc(args)
+}
+
 func (m *MockHooks) BackupMongo(args *app.BackupDBArgs) error {
 	return m.BackupMongoFunc(args)
+}
+
+func (m *MockHooks) RestoreMongo(args *app.RestoreDBArgs) (int, string) {
+	return m.RestoreMongoFunc(args)
+}
+
+func (m *MockHooks) WriteSQLOut(args *app.WriteSQLArgs) (any, error) {
+	return m.WriteSQLOutFunc(args)
 }
