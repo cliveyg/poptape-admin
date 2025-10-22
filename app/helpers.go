@@ -280,7 +280,7 @@ func (a *App) WriteSQLOut(wsa *WriteSQLArgs) (any, error) {
 // WriteMongoOut
 //-----------------------------------------------------------------------------
 
-func (a *App) WriteMongoOut(args WriteMongoArgs) (string, error) {
+func (a *App) WriteMongoOut(args *WriteMongoArgs) (string, error) {
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	uri := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=%s",
