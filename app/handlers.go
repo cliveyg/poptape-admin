@@ -979,14 +979,21 @@ func (a *App) WipeMicroservice(c *gin.Context) {
 
 	if cred.Type == "postgres" {
 		// empty all tables - no need to drop tables
-		sc, err := a.PostgresDeleteAllRecs(&cred, &pw)
+		sc, err := a.Hooks.PostgresDeleteAllRecs(&cred, &pw)
 		if err != nil {
 			c.JSON(sc, gin.H{"message": err.Error()})
 			return
 		}
 	} else if cred.Type == "mongo" {
 		dropCmd := `db.getCollectionNames().forEach(function(Con){db[Con].drop();})`
-		_, err = a.WriteMongoOut(c, dropCmd, &cred, &pw)
+		ctx := c.Request.Context()
+		wmo := WriteMongoArgs{
+			MongoContext: ctx,
+			MongoCommand: dropCmd,
+			Creds:        &cred,
+			Password:     &pw,
+		}
+		_, err = a.Hooks.WriteMongoOut(&wmo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop all collections before restore"})
 			return
@@ -1025,7 +1032,8 @@ func (a *App) DeleteSaveById(c *gin.Context) {
 
 	// delete from mongodb first
 	a.Log.Info().Msgf("Save id [%s]; db name [%s]", saveId.String(), svRec.DBName)
-	err := a.DeleteGridFSBySaveID(c, saveId.String(), svRec.DBName)
+	ctx := c.Request.Context()
+	err := a.Hooks.DeleteGridFSBySaveID(&ctx, saveId.String(), svRec.DBName)
 	if err != nil {
 		a.Log.Info().Msgf("Error deleting data from mongo [%s]", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went donk"})

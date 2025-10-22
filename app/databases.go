@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cliveyg/poptape-admin/utils"
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -640,7 +639,13 @@ func (a *App) RestoreMongo(dba *RestoreDBArgs) (int, string) {
 	if dba.Save.Mode == "schema" || dba.Save.Mode == "all" {
 		if dba.Save.Table != "" {
 			dropCmd := fmt.Sprintf("db.%s.drop()", dba.Save.Table)
-			_, err = a.WriteMongoOut(*dba.MongoContext, dropCmd, dba.Creds, dba.Password)
+			wmo := WriteMongoArgs{
+				MongoContext: *dba.MongoContext,
+				MongoCommand: dropCmd,
+				Creds:        dba.Creds,
+				Password:     dba.Password,
+			}
+			_, err = a.Hooks.WriteMongoOut(&wmo)
 			if err != nil {
 				a.Log.Info().Msgf("Error writing mongo out [%s]", err.Error())
 				return http.StatusInternalServerError, "Failed to drop collection before restore"
@@ -648,7 +653,13 @@ func (a *App) RestoreMongo(dba *RestoreDBArgs) (int, string) {
 			a.Log.Debug().Msgf("Dropped collection [%s]", dba.Save.Table)
 		} else {
 			dropCmd := `db.getCollectionNames().forEach(function(Con){db[Con].drop();})`
-			_, err = a.WriteMongoOut(*dba.MongoContext, dropCmd, dba.Creds, dba.Password)
+			wmo := WriteMongoArgs{
+				MongoContext: *dba.MongoContext,
+				MongoCommand: dropCmd,
+				Creds:        dba.Creds,
+				Password:     dba.Password,
+			}
+			_, err = a.Hooks.WriteMongoOut(&wmo)
 			if err != nil {
 				a.Log.Info().Msgf("Error writing mongo out [%s]", err.Error())
 				return http.StatusInternalServerError, "Failed to drop all collections before restore"
@@ -724,7 +735,7 @@ func (a *App) RestorePostgres(DbArgs *RestoreDBArgs) (int, string) {
 		SQLStatement: "",
 		Creds:        DbArgs.Creds,
 		Password:     DbArgs.Password,
-		ReturnTables: false,
+		ListTables:   false,
 	}
 
 	// Drop/delete logic based on svRec.Mode
@@ -843,7 +854,7 @@ func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 			SQLStatement: fmt.Sprintf("DELETE FROM %s;", table),
 			Creds:        crd,
 			Password:     pw,
-			ReturnTables: false,
+			ListTables:   false,
 		}
 		_, err = a.Hooks.WriteSQLOut(&wso)
 		if err != nil {
@@ -859,21 +870,21 @@ func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 // DeleteGridFSBySaveID
 //-----------------------------------------------------------------------------
 
-func (a *App) DeleteGridFSBySaveID(c *gin.Context, saveID string, dbName string) error {
+func (a *App) DeleteGridFSBySaveID(ctx *context.Context, saveID string, dbName string) error {
 
 	filesColl := a.Mongo.Database(dbName).Collection("fs.files")
 	chunksColl := a.Mongo.Database(dbName).Collection("fs.chunks")
-	ctx := c.Request.Context()
+	//ctx := c.Request.Context()
 
 	// Find all files with the given save_id
-	cursor, err := filesColl.Find(ctx, bson.M{"metadata.save_id": saveID})
+	cursor, err := filesColl.Find(*ctx, bson.M{"metadata.save_id": saveID})
 	if err != nil {
 		return err
 	}
-	defer cursor.Close(ctx)
+	defer cursor.Close(*ctx)
 
 	var fileIDs []interface{}
-	for cursor.Next(ctx) {
+	for cursor.Next(*ctx) {
 		var fileDoc struct {
 			ID interface{} `bson:"_id"`
 		}
@@ -890,12 +901,12 @@ func (a *App) DeleteGridFSBySaveID(c *gin.Context, saveID string, dbName string)
 	}
 
 	// Delete files from fs.files
-	_, err = filesColl.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": fileIDs}})
+	_, err = filesColl.DeleteMany(*ctx, bson.M{"_id": bson.M{"$in": fileIDs}})
 	if err != nil {
 		return err
 	}
 
 	// Delete corresponding chunks from fs.chunks
-	_, err = chunksColl.DeleteMany(ctx, bson.M{"files_id": bson.M{"$in": fileIDs}})
+	_, err = chunksColl.DeleteMany(*ctx, bson.M{"files_id": bson.M{"$in": fileIDs}})
 	return err
 }

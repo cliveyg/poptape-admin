@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/gin-gonic/gin"
@@ -167,12 +168,15 @@ func NewRewindableRequest(method, url string, body []byte) *http.Request {
 
 // MockHooks allows overriding functions for unit testing.
 type MockHooks struct {
-	PrepSaveRestoreFunc func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
-	BackupPostgresFunc  func(args *app.BackupDBArgs) error
-	RestorePostgresFunc func(args *app.RestoreDBArgs) (int, string)
-	BackupMongoFunc     func(args *app.BackupDBArgs) error
-	RestoreMongoFunc    func(args *app.RestoreDBArgs) (int, string)
-	WriteSQLOutFunc     func(args *app.WriteSQLArgs) (any, error)
+	PrepSaveRestoreFunc       func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
+	BackupPostgresFunc        func(args *app.BackupDBArgs) error
+	RestorePostgresFunc       func(args *app.RestoreDBArgs) (int, string)
+	BackupMongoFunc           func(args *app.BackupDBArgs) error
+	RestoreMongoFunc          func(args *app.RestoreDBArgs) (int, string)
+	WriteSQLOutFunc           func(args *app.WriteSQLArgs) (any, error)
+	WriteMongoOutFunc         func(args *app.WriteMongoArgs) (string, error)
+	PostgresDeleteAllRecsFunc func(crd *app.Cred, pw *[]byte) (int, error)
+	DeleteGridFSBySaveIDFunc  func(ctx *context.Context, saveId, DBName string) error
 }
 
 // functions that can be overridden. must match Hooks interface methods
@@ -199,4 +203,16 @@ func (m *MockHooks) RestoreMongo(args *app.RestoreDBArgs) (int, string) {
 
 func (m *MockHooks) WriteSQLOut(args *app.WriteSQLArgs) (any, error) {
 	return m.WriteSQLOutFunc(args)
+}
+
+func (m *MockHooks) WriteMongoOut(args *app.WriteMongoArgs) (string, error) {
+	return m.WriteMongoOutFunc(args)
+}
+
+func (m *MockHooks) PostgresDeleteAllRecs(crd *app.Cred, pw *[]byte) (int, error) {
+	return m.PostgresDeleteAllRecsFunc(crd, pw)
+}
+
+func (m *MockHooks) DeleteGridFSBySaveID(ctx *context.Context, saveId, DBName string) error {
+	return m.DeleteGridFSBySaveIDFunc(ctx, saveId, DBName)
 }

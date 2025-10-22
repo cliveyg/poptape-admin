@@ -122,3 +122,12 @@ func SetupJWTEnv() func() {
 		os.Setenv("TOKEN_LIFESPAN", origLifespan)
 	}
 }
+
+// All DB expectations are set to match out of order.
+func SetupAppWithMockDBAndHooks(t *testing.T) (*app.App, sqlmock.Sqlmock, *MockHooks) {
+	a, _, mock := SetupTestAppWithSQLMock(t)
+	mock.MatchExpectationsInOrder(false)
+	hooks := &MockHooks{}
+	a.Hooks = hooks
+	return a, mock, hooks
+}

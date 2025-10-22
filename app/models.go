@@ -255,5 +255,16 @@ type WriteSQLArgs struct {
 	SQLStatement string
 	Creds        *Cred
 	Password     *[]byte
-	ReturnTables bool
+	ListTables   bool
+}
+
+//-----------------------------------------------------------------------------
+// input struct for WriteMongoOut functions
+//-----------------------------------------------------------------------------
+
+type WriteMongoArgs struct {
+	MongoCommand string
+	Creds        *Cred
+	Password     *[]byte
+	MongoContext context.Context
 }
