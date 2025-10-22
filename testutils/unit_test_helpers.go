@@ -177,6 +177,7 @@ type MockHooks struct {
 	WriteMongoOutFunc         func(args *app.WriteMongoArgs) (string, error)
 	PostgresDeleteAllRecsFunc func(crd *app.Cred, pw *[]byte) (int, error)
 	DeleteGridFSBySaveIDFunc  func(ctx *context.Context, saveId, DBName string) error
+	UserHasCorrectAccessFunc  func(svRec *app.SaveRecord, u *app.User) (int, error)
 }
 
 // functions that can be overridden. must match Hooks interface methods
@@ -215,4 +216,8 @@ func (m *MockHooks) PostgresDeleteAllRecs(crd *app.Cred, pw *[]byte) (int, error
 
 func (m *MockHooks) DeleteGridFSBySaveID(ctx *context.Context, saveId, DBName string) error {
 	return m.DeleteGridFSBySaveIDFunc(ctx, saveId, DBName)
+}
+
+func (m *MockHooks) UserHasCorrectAccess(svRec *app.SaveRecord, u *app.User) (int, error) {
+	return m.UserHasCorrectAccessFunc(svRec, u)
 }

@@ -724,7 +724,7 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 	user, _ := c.Get("user")
 	u := user.(User)
 	c.Set("user", u)
-	sc, err := a.userHasCorrectAccess(&svRec, &u)
+	sc, err := a.Hooks.UserHasCorrectAccess(&svRec, &u)
 	if err != nil {
 		c.JSON(sc, gin.H{"message": err.Error()})
 		return

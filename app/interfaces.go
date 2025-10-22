@@ -180,5 +180,6 @@ type Hooks interface {
 	WriteMongoOut(args *WriteMongoArgs) (string, error)
 	PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error)
 	DeleteGridFSBySaveID(ctx *context.Context, saveId, DBName string) error
+	UserHasCorrectAccess(svRec *SaveRecord, u *User) (int, error)
 	// Add more methods you want to mock/test in the future
 }

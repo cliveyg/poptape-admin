@@ -173,10 +173,10 @@ func encryptCredPass(cr *Cred) error {
 }
 
 //-----------------------------------------------------------------------------
-// userHasCorrectAccess
+// UserHasCorrectAccess
 //-----------------------------------------------------------------------------
 
-func (a *App) userHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
+func (a *App) UserHasCorrectAccess(svRec *SaveRecord, u *User) (int, error) {
 	rcms := RoleCredMS{
 		CredId:         svRec.CredId,
 		MicroserviceId: svRec.MicroserviceId,
@@ -406,10 +406,10 @@ func (a *App) SaveWithAutoVersion(rec *SaveRecord) error {
 }
 
 //-----------------------------------------------------------------------------
-// decryptPassword
+// DecryptPassword
 //-----------------------------------------------------------------------------
 
-func (a *App) decryptPassword(encPw string) ([]byte, error) {
+func (a *App) DecryptPassword(encPw string) ([]byte, error) {
 	key := []byte(os.Getenv("SUPERSECRETKEY"))
 	nonce := []byte(os.Getenv("SUPERSECRETNONCE"))
 	pw, err := utils.Decrypt(encPw, key, nonce)
@@ -422,10 +422,10 @@ func (a *App) decryptPassword(encPw string) ([]byte, error) {
 }
 
 //-----------------------------------------------------------------------------
-// setupAndStartCmd
+// SetupAndStartCmd
 //-----------------------------------------------------------------------------
 
-func (a *App) setupAndStartCmd(name string, args []string, env []string, logPrefix string) (Cmd, io.ReadCloser, error) {
+func (a *App) SetupAndStartCmd(name string, args []string, env []string, logPrefix string) (Cmd, io.ReadCloser, error) {
 	cmd := a.CommandRunner.Command(name, args...)
 	if env != nil {
 		cmd.SetEnv(append(os.Environ(), env...))
@@ -456,10 +456,10 @@ func (a *App) setupAndStartCmd(name string, args []string, env []string, logPref
 }
 
 //-----------------------------------------------------------------------------
-// createGridFSUploadStream - GridFS bucket and upload stream creation
+// CreateGridFSUploadStream - GridFS bucket and upload stream creation
 //-----------------------------------------------------------------------------
 
-func (a *App) createGridFSUploadStream(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
+func (a *App) CreateGridFSUploadStream(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
 	mdb := a.Mongo.Database(db)
 	bucket, err := gridfs.NewBucket(mdb)
 	if err != nil {
@@ -477,10 +477,10 @@ func (a *App) createGridFSUploadStream(db, filename string, metadata map[string]
 }
 
 //-----------------------------------------------------------------------------
-// copyToGridFS - copy stream and log errors
+// CopyToGridFS - copy stream and log errors
 //-----------------------------------------------------------------------------
 
-func (a *App) copyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
+func (a *App) CopyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
 	n, err := io.Copy(uploadStream, stdout)
 	if err != nil {
 		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())

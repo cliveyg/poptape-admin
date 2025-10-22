@@ -458,7 +458,7 @@ func (a *App) PrepSaveRestore(args *PrepSaveRestoreArgs) *PrepSaveRestoreResult 
 //-----------------------------------------------------------------------------
 
 func (a *App) BackupPostgres(args *BackupDBArgs) error {
-	pw, err := a.decryptPassword(args.Creds.DBPassword)
+	pw, err := a.DecryptPassword(args.Creds.DBPassword)
 	if err != nil {
 		return err
 	}
@@ -487,7 +487,7 @@ func (a *App) BackupPostgres(args *BackupDBArgs) error {
 	env := []string{"PGPASSWORD=" + string(pw)}
 	var cmd Cmd
 	var stdout io.ReadCloser
-	cmd, stdout, err = a.setupAndStartCmd("pg_dump", cmdArgs, env, "pg_dump")
+	cmd, stdout, err = a.SetupAndStartCmd("pg_dump", cmdArgs, env, "pg_dump")
 	if err != nil {
 		return err
 	}
@@ -505,13 +505,13 @@ func (a *App) BackupPostgres(args *BackupDBArgs) error {
 		"table":      args.Table,
 	}
 
-	uploadStream, err := a.createGridFSUploadStream(args.DB, filename, metadata)
+	uploadStream, err := a.CreateGridFSUploadStream(args.DB, filename, metadata)
 	if err != nil {
 		return err
 	}
 	defer uploadStream.Close()
 
-	*args.BytesWritten, err = a.copyToGridFS(uploadStream, stdout, "pg_dump")
+	*args.BytesWritten, err = a.CopyToGridFS(uploadStream, stdout, "pg_dump")
 	if err != nil {
 		return err
 	}
@@ -549,7 +549,7 @@ func (a *App) BackupPostgres(args *BackupDBArgs) error {
 //-----------------------------------------------------------------------------
 
 func (a *App) BackupMongo(args *BackupDBArgs) error {
-	pw, err := a.decryptPassword(args.Creds.DBPassword)
+	pw, err := a.DecryptPassword(args.Creds.DBPassword)
 	if err != nil {
 		return err
 	}
@@ -568,7 +568,7 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 
 	var cmd Cmd
 	var stdout io.ReadCloser
-	cmd, stdout, err = a.setupAndStartCmd("mongodump", cmdArgs, nil, "mongodump")
+	cmd, stdout, err = a.SetupAndStartCmd("mongodump", cmdArgs, nil, "mongodump")
 	if err != nil {
 		return err
 	}
@@ -586,13 +586,13 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 		"collection": args.Table,
 	}
 
-	uploadStream, err := a.createGridFSUploadStream(db, filename, metadata)
+	uploadStream, err := a.CreateGridFSUploadStream(db, filename, metadata)
 	if err != nil {
 		return err
 	}
 	defer uploadStream.Close()
 
-	*args.BytesWritten, err = a.copyToGridFS(uploadStream, stdout, "mongodump")
+	*args.BytesWritten, err = a.CopyToGridFS(uploadStream, stdout, "mongodump")
 	if err != nil {
 		return err
 	}
