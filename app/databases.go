@@ -870,21 +870,21 @@ func (a *App) PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error) {
 // DeleteGridFSBySaveID
 //-----------------------------------------------------------------------------
 
-func (a *App) DeleteGridFSBySaveID(ctx context.Context, saveID string, dbName string) error {
+func (a *App) DeleteGridFSBySaveID(ctx *context.Context, saveID string, dbName string) error {
 
 	filesColl := a.Mongo.Database(dbName).Collection("fs.files")
 	chunksColl := a.Mongo.Database(dbName).Collection("fs.chunks")
 	//ctx := c.Request.Context()
 
 	// Find all files with the given save_id
-	cursor, err := filesColl.Find(ctx, bson.M{"metadata.save_id": saveID})
+	cursor, err := filesColl.Find(*ctx, bson.M{"metadata.save_id": saveID})
 	if err != nil {
 		return err
 	}
-	defer cursor.Close(ctx)
+	defer cursor.Close(*ctx)
 
 	var fileIDs []interface{}
-	for cursor.Next(ctx) {
+	for cursor.Next(*ctx) {
 		var fileDoc struct {
 			ID interface{} `bson:"_id"`
 		}
@@ -901,12 +901,12 @@ func (a *App) DeleteGridFSBySaveID(ctx context.Context, saveID string, dbName st
 	}
 
 	// Delete files from fs.files
-	_, err = filesColl.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": fileIDs}})
+	_, err = filesColl.DeleteMany(*ctx, bson.M{"_id": bson.M{"$in": fileIDs}})
 	if err != nil {
 		return err
 	}
 
 	// Delete corresponding chunks from fs.chunks
-	_, err = chunksColl.DeleteMany(ctx, bson.M{"files_id": bson.M{"$in": fileIDs}})
+	_, err = chunksColl.DeleteMany(*ctx, bson.M{"files_id": bson.M{"$in": fileIDs}})
 	return err
 }
