@@ -315,57 +315,57 @@ func (a *App) RemoveRoleFromUser(c *gin.Context) {
 // EditUser
 //-----------------------------------------------------------------------------
 
-func (a *App) EditUser(c *gin.Context) {
-
-	a.Log.Debug().Msg("Editing user")
-	adminId, err := uuid.Parse(c.Param("aId"))
-	if err != nil {
-		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-		return
-	}
-
-	// get the user from request body
-	var ufb User
-	if err = c.ShouldBindJSON(&ufb); err != nil {
-		a.Log.Info().Msgf("Unable to bind input to struc [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-		return
-	}
-
-	if adminId != ufb.AdminId {
-		a.Log.Info().Msgf("Admin Id's don't match [%s]", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-		return
-	}
-
-	// get the user from request url admin id
-	ufu := User{AdminId: adminId}
-	res := a.DB.Preload("Roles").Find(&ufu)
-	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			a.Log.Info().Msgf("User [%s] not found", ufu.AdminId.String())
-			c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-			return
-		}
-		a.Log.Info().Msgf("Error finding user [%s]", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
-		return
-	}
-
-	if ufu.Username == "" {
-		c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-		return
-	}
-
-	res = a.DB.Save(&ufu)
-	if res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang [4]"})
-		a.Log.Info().Msgf("Unable to edit user [%s] because of error: [%s]", ufu.Username, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "User details successfully changed"})
-}
+//func (a *App) EditUser(Con *gin.Context) {
+//
+//	a.Log.Debug().Msg("Editing user")
+//	adminId, err := uuid.Parse(Con.Param("aId"))
+//	if err != nil {
+//		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
+//		Con.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+//		return
+//	}
+//
+//	// get the user from request body
+//	var ufb User
+//	if err = Con.ShouldBindJSON(&ufb); err != nil {
+//		a.Log.Info().Msgf("Unable to bind input to struc [%s]", err.Error())
+//		Con.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+//		return
+//	}
+//
+//	if adminId != ufb.AdminId {
+//		a.Log.Info().Msgf("Admin Id's don't match [%s]", err.Error())
+//		Con.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+//		return
+//	}
+//
+//	// get the user from request url admin id
+//	ufu := User{AdminId: adminId}
+//	res := a.DB.Preload("Roles").Find(&ufu)
+//	if res.Error != nil {
+//		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+//			a.Log.Info().Msgf("User [%s] not found", ufu.AdminId.String())
+//			Con.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+//			return
+//		}
+//		a.Log.Info().Msgf("Error finding user [%s]", err.Error())
+//		Con.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
+//		return
+//	}
+//
+//	if ufu.Username == "" {
+//		Con.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+//		return
+//	}
+//
+//	res = a.DB.Save(&ufu)
+//	if res.Error != nil {
+//		Con.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang [4]"})
+//		a.Log.Info().Msgf("Unable to edit user [%s] because of error: [%s]", ufu.Username, err.Error())
+//		return
+//	}
+//	Con.JSON(http.StatusOK, gin.H{"message": "User details successfully changed"})
+//}
 
 //-----------------------------------------------------------------------------
 // DeleteUser
@@ -462,7 +462,7 @@ func (a *App) Login(c *gin.Context) {
 	}
 
 	u := User{Username: lg.Username}
-	if a.checkLoginDetails(&lg, &u) != nil {
+	if a.CheckLoginDetails(&lg, &u) != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Username and/or password incorrect"})
 		return
 	}
@@ -792,11 +792,23 @@ func (a *App) RestoreDBBySaveId(c *gin.Context) {
 	}
 
 	// dispatch to the correct restore function
+	rdba := RestoreDBArgs{
+		Save:           &svRec,
+		Creds:          &crdRec,
+		Password:       &pw,
+		DownloadStream: downloadStream,
+		MongoContext:   nil,
+	}
+	mess := "default restore message"
 	switch svRec.Type {
 	case "postgres":
-		a.RestorePostgres(c, &svRec, &crdRec, &pw, downloadStream)
+		sc, mess = a.Hooks.RestorePostgres(&rdba)
+		c.JSON(sc, gin.H{"message": mess})
 	case "mongo":
-		a.RestoreMongo(c, &svRec, &crdRec, &pw, downloadStream)
+		rc := c.Request.Context()
+		rdba.MongoContext = &rc
+		sc, mess = a.Hooks.RestoreMongo(&rdba)
+		c.JSON(sc, gin.H{"message": mess})
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid save type"})
 	}
@@ -827,15 +839,15 @@ func (a *App) MetadataReport(c *gin.Context) {
 		  rcms.microservice_id,
 		  rcms.cred_id,
 		  rcms.role_name,
-		  c.db_name,
-		  c.type,
+		  Con.db_name,
+		  Con.type,
 		  COALESCE(stats.latest_version, 0) AS latest_version,
 		  sr.save_id AS last_save_id,
 		  COALESCE(stats.saved_count, 0) AS saved_count,
 		  COALESCE(stats.valid_count, 0) AS valid_count,
 		  COALESCE(stats.invalid_count, 0) AS invalid_count
 		FROM role_cred_ms rcms
-		JOIN creds c ON c.cred_id = rcms.cred_id
+		JOIN creds Con ON Con.cred_id = rcms.cred_id
 		LEFT JOIN stats ON stats.microservice_id = rcms.microservice_id AND stats.cred_id = rcms.cred_id
 		LEFT JOIN save_records sr
 		  ON sr.microservice_id = rcms.microservice_id
@@ -973,8 +985,8 @@ func (a *App) WipeMicroservice(c *gin.Context) {
 			return
 		}
 	} else if cred.Type == "mongo" {
-		dropCmd := `db.getCollectionNames().forEach(function(c){db[c].drop();})`
-		_, err = a.writeMongoOut(c, dropCmd, &cred, &pw)
+		dropCmd := `db.getCollectionNames().forEach(function(Con){db[Con].drop();})`
+		_, err = a.WriteMongoOut(c, dropCmd, &cred, &pw)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to drop all collections before restore"})
 			return

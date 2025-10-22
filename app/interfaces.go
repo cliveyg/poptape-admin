@@ -172,5 +172,8 @@ type Hooks interface {
 	PrepSaveRestore(args *PrepSaveRestoreArgs) *PrepSaveRestoreResult
 	BackupPostgres(args *BackupDBArgs) error
 	BackupMongo(args *BackupDBArgs) error
+	RestorePostgres(args *RestoreDBArgs) (int, string)
+	RestoreMongo(args *RestoreDBArgs) (int, string)
+	WriteSQLOut(args *WriteSQLArgs) (any, error)
 	// Add more methods you want to mock/test in the future
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -47,10 +48,10 @@ func (a *App) GetUUIDFromParams(c *gin.Context, u *uuid.UUID, key string) error 
 }
 
 //-----------------------------------------------------------------------------
-// checkLoginDetails
+// CheckLoginDetails
 //-----------------------------------------------------------------------------
 
-func (a *App) checkLoginDetails(l *Login, u *User) error {
+func (a *App) CheckLoginDetails(l *Login, u *User) error {
 
 	res := a.DB.Preload("Roles").First(&u, "username = ?", l.Username)
 	if res.Error != nil {
@@ -239,10 +240,10 @@ func (a *App) GetRoleDetails(c *gin.Context, u *User, rName *string) error {
 }
 
 //-----------------------------------------------------------------------------
-// writeSQLOut
+// WriteSQLOut
 //-----------------------------------------------------------------------------
 
-func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any, error) {
+func (a *App) WriteSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any, error) {
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	// build psql arguments
@@ -251,7 +252,7 @@ func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any
 		"-U", crdRec.DBUsername,
 		"-p", crdRec.DBPort,
 		"-d", crdRec.DBName,
-		"-c", cm,
+		"-Con", cm,
 	}
 	if tabRet {
 		args = append(args, "-A", "-t")
@@ -277,43 +278,40 @@ func (a *App) writeSQLOut(cm string, crdRec *Cred, pw *[]byte, tabRet bool) (any
 }
 
 //-----------------------------------------------------------------------------
-// writeMongoOut
+// WriteMongoOut
 //-----------------------------------------------------------------------------
 
-func (a *App) writeMongoOut(c *gin.Context, cmdStr string, crdRec *Cred, pw *[]byte) (string, error) {
+func (a *App) WriteMongoOut(ctx context.Context, cmdStr string, crdRec *Cred, pw *[]byte) (string, error) {
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	uri := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=%s",
 		crdRec.DBUsername, string(*pw), crdRec.Host, crdRec.DBPort, crdRec.DBName, crdRec.DBName)
 
 	a.Log.Debug().Msgf("mongo driver URI is <<%s>>", uri)
-	a.Log.Debug().Msgf("writeMongoOut cmdStr is <<%s>>", cmdStr)
+	a.Log.Debug().Msgf("WriteMongoOut cmdStr is <<%s>>", cmdStr)
 
-	// Use the gin.Context's request context for Mongo operations
-	mongoCtx := c.Request.Context()
-
-	client, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		a.Log.Info().Msgf("mongo client connect failed: %s", err.Error())
 		return "", err
 	}
-	defer func() { _ = client.Disconnect(mongoCtx) }()
+	defer func() { _ = client.Disconnect(ctx) }()
 
-	if err := client.Ping(mongoCtx, readpref.Primary()); err != nil {
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		a.Log.Info().Msgf("mongo ping failed: %s", err.Error())
 		return "", err
 	}
 
 	// Handle "drop all collections" pattern
 	if strings.HasPrefix(cmdStr, "db.getCollectionNames().forEach") {
-		collNames, err := client.Database(crdRec.DBName).ListCollectionNames(mongoCtx, map[string]interface{}{})
+		collNames, err := client.Database(crdRec.DBName).ListCollectionNames(ctx, map[string]interface{}{})
 		if err != nil {
 			a.Log.Info().Msgf("Failed to list collections: %s", err.Error())
 			return "", err
 		}
 		var dropped int64
 		for _, name := range collNames {
-			err := client.Database(crdRec.DBName).Collection(name).Drop(mongoCtx)
+			err := client.Database(crdRec.DBName).Collection(name).Drop(ctx)
 			if err != nil {
 				a.Log.Info().Msgf("Failed to drop collection %s: %s", name, err.Error())
 				stderrBuf.WriteString(fmt.Sprintf("Failed to drop %s: %v\n", name, err))
@@ -334,7 +332,7 @@ func (a *App) writeMongoOut(c *gin.Context, cmdStr string, crdRec *Cred, pw *[]b
 		collectionName = strings.SplitN(s, ".", 2)[0]
 		a.Log.Debug().Msgf("Deleting all documents in collection: %s", collectionName)
 		coll := client.Database(crdRec.DBName).Collection(collectionName)
-		result, err := coll.DeleteMany(mongoCtx, map[string]interface{}{})
+		result, err := coll.DeleteMany(ctx, map[string]interface{}{})
 		if err != nil {
 			a.Log.Info().Msgf("collection deleteMany failed: %s", err.Error())
 			return "", err
@@ -350,14 +348,19 @@ func (a *App) writeMongoOut(c *gin.Context, cmdStr string, crdRec *Cred, pw *[]b
 }
 
 //-----------------------------------------------------------------------------
-// listTables
+// ListTables
 //-----------------------------------------------------------------------------
 
-func (a *App) listTables(crd *Cred, pw *[]byte) ([]string, error) {
+func (a *App) ListTables(crd *Cred, pw *[]byte) ([]string, error) {
 
 	var tables []string
-	cm := "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');"
-	out, err := a.writeSQLOut(cm, crd, pw, true)
+	wso := WriteSQLArgs{
+		SQLStatement: "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');",
+		Creds:        crd,
+		Password:     pw,
+		ReturnTables: true,
+	}
+	out, err := a.Hooks.WriteSQLOut(&wso)
 	if err != nil {
 		return nil, err
 	}
