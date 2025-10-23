@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"gorm.io/gorm"
 	"io"
 	"os/exec"
@@ -180,5 +181,10 @@ type Hooks interface {
 	WriteMongoOut(args *WriteMongoArgs) (string, error)
 	PostgresDeleteAllRecs(crd *Cred, pw *[]byte) (int, error)
 	DeleteGridFSBySaveID(ctx *context.Context, saveId, DBName string) error
+	UserHasCorrectAccess(svRec *SaveRecord, u *User) (int, error)
+	IOCopy(dst io.Writer, src io.Reader) (int64, error)
+	CreateGridFSUploadStream(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error)
+	CopyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error)
+	SaveWithAutoVersion(rec *SaveRecord) error
 	// Add more methods you want to mock/test in the future
 }

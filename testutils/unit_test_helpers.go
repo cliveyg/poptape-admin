@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"gorm.io/gorm"
 	"io"
 	"net/http"
@@ -168,15 +169,20 @@ func NewRewindableRequest(method, url string, body []byte) *http.Request {
 
 // MockHooks allows overriding functions for unit testing.
 type MockHooks struct {
-	PrepSaveRestoreFunc       func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
-	BackupPostgresFunc        func(args *app.BackupDBArgs) error
-	RestorePostgresFunc       func(args *app.RestoreDBArgs) (int, string)
-	BackupMongoFunc           func(args *app.BackupDBArgs) error
-	RestoreMongoFunc          func(args *app.RestoreDBArgs) (int, string)
-	WriteSQLOutFunc           func(args *app.WriteSQLArgs) (any, error)
-	WriteMongoOutFunc         func(args *app.WriteMongoArgs) (string, error)
-	PostgresDeleteAllRecsFunc func(crd *app.Cred, pw *[]byte) (int, error)
-	DeleteGridFSBySaveIDFunc  func(ctx *context.Context, saveId, DBName string) error
+	PrepSaveRestoreFunc          func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
+	BackupPostgresFunc           func(args *app.BackupDBArgs) error
+	RestorePostgresFunc          func(args *app.RestoreDBArgs) (int, string)
+	BackupMongoFunc              func(args *app.BackupDBArgs) error
+	RestoreMongoFunc             func(args *app.RestoreDBArgs) (int, string)
+	WriteSQLOutFunc              func(args *app.WriteSQLArgs) (any, error)
+	WriteMongoOutFunc            func(args *app.WriteMongoArgs) (string, error)
+	PostgresDeleteAllRecsFunc    func(crd *app.Cred, pw *[]byte) (int, error)
+	DeleteGridFSBySaveIDFunc     func(ctx *context.Context, saveId, DBName string) error
+	UserHasCorrectAccessFunc     func(svRec *app.SaveRecord, u *app.User) (int, error)
+	IOCopyFunc                   func(dst io.Writer, src io.Reader) (int64, error)
+	CreateGridFSUploadStreamFunc func(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error)
+	CopyToGridFSFunc             func(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error)
+	SaveWithAutoVersionFunc      func(rec *app.SaveRecord) error
 }
 
 // functions that can be overridden. must match Hooks interface methods
@@ -215,4 +221,24 @@ func (m *MockHooks) PostgresDeleteAllRecs(crd *app.Cred, pw *[]byte) (int, error
 
 func (m *MockHooks) DeleteGridFSBySaveID(ctx *context.Context, saveId, DBName string) error {
 	return m.DeleteGridFSBySaveIDFunc(ctx, saveId, DBName)
+}
+
+func (m *MockHooks) CopyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
+	return m.CopyToGridFSFunc(uploadStream, stdout, logPrefix)
+}
+
+func (m *MockHooks) UserHasCorrectAccess(svRec *app.SaveRecord, u *app.User) (int, error) {
+	return m.UserHasCorrectAccessFunc(svRec, u)
+}
+
+func (m *MockHooks) IOCopy(dst io.Writer, src io.Reader) (int64, error) {
+	return m.IOCopyFunc(dst, src)
+}
+
+func (m *MockHooks) CreateGridFSUploadStream(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
+	return m.CreateGridFSUploadStreamFunc(db, filename, metadata)
+}
+
+func (m *MockHooks) SaveWithAutoVersion(rec *app.SaveRecord) error {
+	return m.SaveWithAutoVersionFunc(rec)
 }

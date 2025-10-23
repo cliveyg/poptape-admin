@@ -39,7 +39,9 @@ func VerifyPassword(bp []byte, hashed []byte) bool {
 
 //-----------------------------------------------------------------------------
 
-func Encrypt(ptext []byte, key []byte, nonce []byte) (string, error) {
+var Encrypt = encrypt
+
+func encrypt(ptext []byte, key []byte, nonce []byte) (string, error) {
 
 	// encrypt the byte array and base64 encode the encrypted byte array
 	block, err := aes.NewCipher(key)

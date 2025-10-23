@@ -72,3 +72,24 @@ func ResetMongoDB(t *testing.T, a *app.App) {
 		}
 	}
 }
+
+func WithMongoEnv(t *testing.T, fn func()) {
+	origHost := os.Getenv("MONGO_HOST")
+	origPort := os.Getenv("MONGO_PORT")
+	origDB := os.Getenv("MONGO_DBNAME")
+	origUser := os.Getenv("MONGO_USERNAME")
+	origPass := os.Getenv("MONGO_PASSWORD")
+	defer func() {
+		os.Setenv("MONGO_HOST", origHost)
+		os.Setenv("MONGO_PORT", origPort)
+		os.Setenv("MONGO_DBNAME", origDB)
+		os.Setenv("MONGO_USERNAME", origUser)
+		os.Setenv("MONGO_PASSWORD", origPass)
+	}()
+	os.Setenv("MONGO_HOST", "localhost")
+	os.Setenv("MONGO_PORT", "27017")
+	os.Setenv("MONGO_DBNAME", "testdb")
+	os.Setenv("MONGO_USERNAME", "testuser")
+	os.Setenv("MONGO_PASSWORD", "testpass")
+	fn()
+}
