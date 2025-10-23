@@ -481,11 +481,19 @@ func (a *App) CreateGridFSUploadStream(db, filename string, metadata map[string]
 //-----------------------------------------------------------------------------
 
 func (a *App) CopyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
-	n, err := io.Copy(uploadStream, stdout)
+	n, err := a.Hooks.IOCopy(uploadStream, stdout)
 	if err != nil {
 		a.Log.Info().Msgf("Error copying data to uploadStream [%s]", err.Error())
 		return n, err
 	}
 	a.Log.Debug().Msgf("Copied %d bytes to GridFS for %s", n, logPrefix)
 	return n, nil
+}
+
+//-----------------------------------------------------------------------------
+// IOCopy - copy stream to and from gridfs
+//-----------------------------------------------------------------------------
+
+func (a *App) IOCopy(dst io.Writer, src io.Reader) (int64, error) {
+	return io.Copy(dst, src)
 }

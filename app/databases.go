@@ -505,13 +505,16 @@ func (a *App) BackupPostgres(args *BackupDBArgs) error {
 		"table":      args.Table,
 	}
 
-	uploadStream, err := a.CreateGridFSUploadStream(args.DB, filename, metadata)
+	uploadStream, err := a.Hooks.CreateGridFSUploadStream(args.DB, filename, metadata)
 	if err != nil {
 		return err
 	}
-	defer uploadStream.Close()
+	// this is here to aid unit testing
+	if uploadStream != nil {
+		defer uploadStream.Close()
+	}
 
-	*args.BytesWritten, err = a.CopyToGridFS(uploadStream, stdout, "pg_dump")
+	*args.BytesWritten, err = a.Hooks.CopyToGridFS(uploadStream, stdout, "pg_dump")
 	if err != nil {
 		return err
 	}
@@ -536,7 +539,7 @@ func (a *App) BackupPostgres(args *BackupDBArgs) error {
 		Type:           args.Creds.Type,
 		Size:           *args.BytesWritten,
 	}
-	if err = a.SaveWithAutoVersion(&sr); err != nil {
+	if err = a.Hooks.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}
@@ -586,13 +589,16 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 		"collection": args.Table,
 	}
 
-	uploadStream, err := a.CreateGridFSUploadStream(db, filename, metadata)
+	uploadStream, err := a.Hooks.CreateGridFSUploadStream(db, filename, metadata)
 	if err != nil {
 		return err
 	}
-	defer uploadStream.Close()
+	// this is here to aid unit testing
+	if uploadStream != nil {
+		defer uploadStream.Close()
+	}
 
-	*args.BytesWritten, err = a.CopyToGridFS(uploadStream, stdout, "mongodump")
+	*args.BytesWritten, err = a.Hooks.CopyToGridFS(uploadStream, stdout, "mongodump")
 	if err != nil {
 		return err
 	}
@@ -618,7 +624,7 @@ func (a *App) BackupMongo(args *BackupDBArgs) error {
 		Type:           args.Creds.Type,
 		Size:           *args.BytesWritten,
 	}
-	if err = a.SaveWithAutoVersion(&sr); err != nil {
+	if err = a.Hooks.SaveWithAutoVersion(&sr); err != nil {
 		a.Log.Info().Msgf("Unable to insert save record [%s]", err.Error())
 		return err
 	}
@@ -702,7 +708,7 @@ func (a *App) RestoreMongo(dba *RestoreDBArgs) (int, string) {
 	}
 	a.Log.Debug().Msg("Started mongorestore ✓")
 
-	n, err := io.Copy(stdin, dba.DownloadStream)
+	n, err := a.Hooks.IOCopy(stdin, dba.DownloadStream)
 	stdin.Close()
 	a.Log.Debug().Msgf("Copied %d bytes from GridFS to mongorestore stdin", n)
 	if err != nil {
@@ -780,7 +786,7 @@ func (a *App) RestorePostgres(DbArgs *RestoreDBArgs) (int, string) {
 			}
 		} else {
 			var sc int
-			sc, err = a.PostgresDeleteAllRecs(DbArgs.Creds, DbArgs.Password)
+			sc, err = a.Hooks.PostgresDeleteAllRecs(DbArgs.Creds, DbArgs.Password)
 			if err != nil {
 				a.Log.Info().Msgf("Error: [%s]", err.Error())
 				return sc, "Something went splat"
@@ -819,7 +825,7 @@ func (a *App) RestorePostgres(DbArgs *RestoreDBArgs) (int, string) {
 	}
 	a.Log.Debug().Msg("After cmd.Start ✓")
 
-	_, err = io.Copy(stdin, DbArgs.DownloadStream)
+	_, err = a.Hooks.IOCopy(stdin, DbArgs.DownloadStream)
 	if err != nil {
 		a.Log.Info().Msgf("io.Copy error [%s]", err.Error())
 		return http.StatusInternalServerError, "Something went splash"
