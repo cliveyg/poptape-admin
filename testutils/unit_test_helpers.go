@@ -4,18 +4,25 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"time"
 )
 
-// MockDB implements app.DBInterface for use in unit tests. All methods are stubbed for testify/mock.
+//-----------------------------------------------------------------------------
+// MockDB implements app.DBInterface for use in unit tests.
+// All methods are stubbed for testify/mock.
+//-----------------------------------------------------------------------------
+
 type MockDB struct {
 	mock.Mock
 }
@@ -113,12 +120,18 @@ func (m *MockDB) Scan(dest interface{}) *gorm.DB {
 	return args.Get(0).(*gorm.DB)
 }
 
-// ------ Test helpers -------
+//-----------------------------------------------------------------------------
+// logger for tests
+//-----------------------------------------------------------------------------
 
 func CreateTestLogger() *zerolog.Logger {
 	logger := zerolog.New(io.Discard)
 	return &logger
 }
+
+//-----------------------------------------------------------------------------
+// useful gin and http functions
+//-----------------------------------------------------------------------------
 
 func NewTestResponseRecorder() *httptest.ResponseRecorder {
 	return httptest.NewRecorder()
@@ -155,6 +168,15 @@ func CreateGinContextWithUser(user app.User) (*gin.Context, *httptest.ResponseRe
 	return c, w
 }
 
+func SetupJWTHeaderContext(token string) *gin.Context {
+	w := NewTestResponseRecorder()
+	c := NewTestGinContext(w)
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.Header.Set("y-access-token", token)
+	c.Request = req
+	return c
+}
+
 // NewRewindableRequest creates an *http.Request with a rewindable body
 // suitable for Gin handlers that bind multiple times from the same body.
 func NewRewindableRequest(method, url string, body []byte) *http.Request {
@@ -167,7 +189,67 @@ func NewRewindableRequest(method, url string, body []byte) *http.Request {
 	return req
 }
 
+//-----------------------------------------------------------------------------
+// structs and functions for testing InitialiseMongo function
+//-----------------------------------------------------------------------------
+
+type TestCase struct {
+	Name         string
+	Config       app.MongoConfig
+	Factory      func(context.Context, string) (*mongo.Client, error)
+	Timeout      time.Duration
+	WantErr      bool
+	WantClient   bool
+	WantAttempts int
+	WantSleeps   int
+}
+
+// InitialiseMongoWithTimeout is a test helper to inject timeout and start for Mongo connection logic.
+// It mirrors app.InitialiseMongo but allows controlling the retry loop for fast, deterministic tests.
+func InitialiseMongoWithTimeout(
+	a *app.App,
+	config app.MongoConfig,
+	clientFactory func(context.Context, string) (*mongo.Client, error),
+	sleep app.SleepFunc,
+	timeout time.Duration,
+	start time.Time,
+	now func() time.Time, // Add this parameter!
+) error {
+	var err error
+	var client *mongo.Client
+	x := 1
+	mongoURI := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=admin",
+		config.Username, config.Password, config.Host, config.Port, config.DBName,
+	)
+
+	for now().Sub(start) < timeout {
+		a.Log.Debug().Msgf("Trying to connect to MongoDB...[%d]", x)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		client, err = clientFactory(ctx, mongoURI)
+		if err == nil {
+			cancel()
+			break
+		}
+		a.Log.Error().Err(err)
+		cancel()
+		sleep(2 * time.Second)
+		x++
+	}
+
+	if err != nil {
+		a.Log.Fatal().Msgf("Failed to connect to MongoDB after %s seconds", timeout)
+		return err
+	}
+
+	a.Mongo = client
+	a.Log.Debug().Msg("Connected to MongoDB successfully ✓")
+	return nil
+}
+
+//-----------------------------------------------------------------------------
 // MockHooks allows overriding functions for unit testing.
+//-----------------------------------------------------------------------------
+
 type MockHooks struct {
 	PrepSaveRestoreFunc          func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult
 	BackupPostgresFunc           func(args *app.BackupDBArgs) error
@@ -185,7 +267,9 @@ type MockHooks struct {
 	SaveWithAutoVersionFunc      func(rec *app.SaveRecord) error
 }
 
+//-----------------------------------------------------------------------------
 // functions that can be overridden. must match Hooks interface methods
+//-----------------------------------------------------------------------------
 
 func (m *MockHooks) PrepSaveRestore(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult {
 	return m.PrepSaveRestoreFunc(args)

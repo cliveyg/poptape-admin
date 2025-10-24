@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -80,10 +81,10 @@ func (a *App) CheckLoginDetails(l *Login, u *User) error {
 }
 
 //-----------------------------------------------------------------------------
-// hasValidJWT
+// HasValidJWT
 //-----------------------------------------------------------------------------
 
-func (a *App) hasValidJWT(c *gin.Context) bool {
+func (a *App) HasValidJWT(c *gin.Context) bool {
 
 	var y YHeader
 	var err error
@@ -497,3 +498,29 @@ func (a *App) CopyToGridFS(uploadStream *gridfs.UploadStream, stdout io.Reader, 
 func (a *App) IOCopy(dst io.Writer, src io.Reader) (int64, error) {
 	return io.Copy(dst, src)
 }
+
+//-----------------------------------------------------------------------------
+// InitialiseMongo helper functions
+//-----------------------------------------------------------------------------
+
+func GetMongoConfig() MongoConfig {
+	return MongoConfig{
+		Host:     os.Getenv("MONGO_HOST"),
+		Port:     os.Getenv("MONGO_PORT"),
+		DBName:   os.Getenv("MONGO_DBNAME"),
+		Username: os.Getenv("MONGO_USERNAME"),
+		Password: os.Getenv("MONGO_PASSWORD"),
+	}
+}
+
+// DefaultClientFactory for production MongoDB connections
+func DefaultClientFactory(ctx context.Context, uri string) (*mongo.Client, error) {
+	return mongo.Connect(ctx, options.Client().ApplyURI(uri))
+}
+
+// DefaultSleep for production
+func DefaultSleep(d time.Duration) {
+	time.Sleep(d)
+}
+
+type SleepFunc func(time.Duration)

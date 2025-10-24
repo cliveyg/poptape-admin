@@ -268,3 +268,7 @@ type WriteMongoArgs struct {
 	Password     *[]byte
 	MongoContext context.Context
 }
+
+type MongoConfig struct {
+	Host, Port, DBName, Username, Password string
+}
