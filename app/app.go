@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/mongo"
+	"time"
 )
 
 type App struct {
@@ -23,7 +24,14 @@ func (a *App) InitialiseApp() {
 	a.InitialiseRoutes()
 	a.InitialisePostgres()
 	a.PopulatePostgresDB()
-	a.InitialiseMongo()
+	err := a.InitialiseMongo(GetMongoConfig(),
+		DefaultClientFactory,
+		DefaultSleep,
+		time.Now,
+		60*time.Second)
+	if err != nil {
+		a.Log.Fatal().Err(err).Msg("Failed to initialise MongoDB")
+	}
 	a.InitialiseAWS()
 }
 

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"io"
@@ -24,49 +23,43 @@ import (
 // InitialiseMongo
 //-----------------------------------------------------------------------------
 
-func (a *App) InitialiseMongo() {
-
-	timeout := 60 * time.Second
-	start := time.Now()
+func (a *App) InitialiseMongo(
+	config MongoConfig,
+	clientFactory func(context.Context, string) (*mongo.Client, error),
+	sleep SleepFunc,
+	now func() time.Time,
+	timeout time.Duration,
+) error {
+	start := now()
 	var err error
 	var client *mongo.Client
 	x := 1
-
-	mongoHost := os.Getenv("MONGO_HOST")
-	mongoPort := os.Getenv("MONGO_PORT")
-	mongoDB := os.Getenv("MONGO_DBNAME")
-	mongoUser := os.Getenv("MONGO_USERNAME")
-	mongoPass := os.Getenv("MONGO_PASSWORD")
-
-	// Build MongoDB URI
 	mongoURI := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s?authSource=admin",
-		mongoUser, mongoPass, mongoHost, mongoPort, mongoDB,
+		config.Username, config.Password, config.Host, config.Port, config.DBName,
 	)
 
-	for time.Since(start) < timeout {
+	attempt := 0
+	for attempt == 0 || now().Sub(start) < timeout {
+		attempt++
 		a.Log.Debug().Msgf("Trying to connect to MongoDB...[%d]", x)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		clientOptions := options.Client().ApplyURI(mongoURI)
-		client, err = mongo.Connect(ctx, clientOptions)
+		client, err = clientFactory(ctx, mongoURI)
+		cancel()
 		if err == nil {
-			err = client.Ping(ctx, nil)
-			if err == nil {
-				cancel()
-				break
-			}
+			break
 		}
 		a.Log.Error().Err(err)
-		cancel()
-		time.Sleep(2 * time.Second)
+		sleep(2 * time.Second)
 		x++
 	}
 
 	if err != nil {
-		a.Log.Fatal().Msgf("Failed to connect to MongoDB after %s seconds", timeout)
+		return fmt.Errorf("failed to connect to MongoDB after %s seconds: %w", timeout, err)
 	}
 
 	a.Mongo = client
 	a.Log.Debug().Msg("Connected to MongoDB successfully ✓")
+	return nil
 }
 
 //-----------------------------------------------------------------------------
