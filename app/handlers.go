@@ -312,62 +312,6 @@ func (a *App) RemoveRoleFromUser(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
-// EditUser
-//-----------------------------------------------------------------------------
-
-//func (a *App) EditUser(Con *gin.Context) {
-//
-//	a.Log.Debug().Msg("Editing user")
-//	adminId, err := uuid.Parse(Con.Param("aId"))
-//	if err != nil {
-//		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
-//		Con.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-//		return
-//	}
-//
-//	// get the user from request body
-//	var ufb User
-//	if err = Con.ShouldBindJSON(&ufb); err != nil {
-//		a.Log.Info().Msgf("Unable to bind input to struc [%s]", err.Error())
-//		Con.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-//		return
-//	}
-//
-//	if adminId != ufb.AdminId {
-//		a.Log.Info().Msgf("Admin Id's don't match [%s]", err.Error())
-//		Con.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-//		return
-//	}
-//
-//	// get the user from request url admin id
-//	ufu := User{AdminId: adminId}
-//	res := a.DB.Preload("Roles").Find(&ufu)
-//	if res.Error != nil {
-//		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-//			a.Log.Info().Msgf("User [%s] not found", ufu.AdminId.String())
-//			Con.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-//			return
-//		}
-//		a.Log.Info().Msgf("Error finding user [%s]", err.Error())
-//		Con.JSON(http.StatusInternalServerError, gin.H{"message": "Something went pop"})
-//		return
-//	}
-//
-//	if ufu.Username == "" {
-//		Con.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-//		return
-//	}
-//
-//	res = a.DB.Save(&ufu)
-//	if res.Error != nil {
-//		Con.JSON(http.StatusInternalServerError, gin.H{"message": "Something went bang [4]"})
-//		a.Log.Info().Msgf("Unable to edit user [%s] because of error: [%s]", ufu.Username, err.Error())
-//		return
-//	}
-//	Con.JSON(http.StatusOK, gin.H{"message": "User details successfully changed"})
-//}
-
-//-----------------------------------------------------------------------------
 // DeleteUser
 //-----------------------------------------------------------------------------
 
