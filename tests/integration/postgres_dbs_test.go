@@ -388,7 +388,7 @@ func TestBackupPostgres_BadDBName(t *testing.T) {
 	require.NotEmpty(t, msId, "could not find microservice_id for reviews")
 
 	// Call the backup endpoint with a bad dbname
-	url := fmt.Sprintf("/admin/save/%s/%s?mode=gfhf", msId, "rwehiu8**")
+	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msId, "rwehiu8**")
 	req2, _ := http.NewRequest("GET", url, nil)
 	req2.Header.Set("y-access-token", token)
 	w2 := httptest.NewRecorder()
