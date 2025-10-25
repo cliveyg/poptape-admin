@@ -322,3 +322,79 @@ func TestBackupPostgres_BadMode(t *testing.T) {
 	require.Contains(t, w2.Body.String(), "Invalid mode value")
 
 }
+
+func TestBackupPostgres_BadDBName(t *testing.T) {
+	testutils.ResetPostgresDB(t, TestApp)
+	testutils.ResetMongoDB(t, TestApp)
+
+	dbName := "poptape_reviews"
+
+	// Setup MongoDB test client and drop test DB to start clean
+	mongoClient := testutils.TestMongoClient(t)
+	defer mongoClient.Disconnect(context.Background())
+	err := mongoClient.Database(dbName).Drop(context.Background())
+	require.NoError(t, err)
+
+	superUser := os.Getenv("SUPERUSER")
+	superPass := os.Getenv("SUPERPASS")
+	require.NotEmpty(t, superUser)
+	require.NotEmpty(t, superPass)
+	token := testutils.LoginAndGetToken(t, TestApp, superUser, superPass)
+
+	// Create reviews cred via API
+	payload := map[string]interface{}{
+		"db_name":     dbName,
+		"type":        "postgres",
+		"url":         "/reviews",
+		"db_username": "poptape_reviews",
+		"db_password": base64.StdEncoding.EncodeToString([]byte("password")),
+		"db_port":     "5432",
+		"host":        "poptape-reviews-db-1",
+		"role_name":   "reviews",
+		"ms_name":     "reviews",
+	}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(body))
+	req.Header.Set("y-access-token", token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code)
+	var resp struct{ Message string }
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	// Get microservice_id for "reviews" from API
+	reqMS, _ := http.NewRequest("GET", "/admin/microservices", nil)
+	reqMS.Header.Set("y-access-token", token)
+	wMS := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(wMS, reqMS)
+	require.Equal(t, http.StatusOK, wMS.Code)
+	var msResp struct {
+		Microservices []struct {
+			MicroserviceId string `json:"microservice_id"`
+			MSName         string `json:"ms_name"`
+			CreatedBy      string `json:"created_by"`
+			Created        string `json:"created"`
+		} `json:"microservices"`
+	}
+	require.NoError(t, json.Unmarshal(wMS.Body.Bytes(), &msResp))
+	var msId string
+	for _, ms := range msResp.Microservices {
+		if ms.MSName == "reviews" {
+			msId = ms.MicroserviceId
+			break
+		}
+	}
+	require.NotEmpty(t, msId, "could not find microservice_id for reviews")
+
+	// Call the backup endpoint with a bad dbname
+	url := fmt.Sprintf("/admin/save/%s/%s?mode=gfhf", msId, "%T$$T^$%GEDd")
+	req2, _ := http.NewRequest("GET", url, nil)
+	req2.Header.Set("y-access-token", token)
+	w2 := httptest.NewRecorder()
+	TestApp.Router.ServeHTTP(w2, req2)
+	require.Equal(t, http.StatusBadRequest, w2.Code)
+
+	require.Contains(t, w2.Body.String(), "Invalid data input for db param")
+
+}
