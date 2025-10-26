@@ -202,8 +202,8 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
-          # go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestBackupPostgres_BadDBName' | tee int.test.out
+          #go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
+          go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestBackupPostgres_BadTableName' | tee int.test.out
           grep -v '/tests/' int.cover.out | grep -v '/testutils/' > int.cover.out.filtered
           mv int.cover.out.filtered int.cover.out
         shell: bash

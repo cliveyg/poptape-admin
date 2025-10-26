@@ -323,7 +323,7 @@ func TestBackupPostgres_BadMode(t *testing.T) {
 
 }
 
-func TestBackupPostgres_BadDBName(t *testing.T) {
+func TestBackupPostgres_BadTableName(t *testing.T) {
 	testutils.ResetPostgresDB(t, TestApp)
 	testutils.ResetMongoDB(t, TestApp)
 
@@ -388,13 +388,13 @@ func TestBackupPostgres_BadDBName(t *testing.T) {
 	require.NotEmpty(t, msId, "could not find microservice_id for reviews")
 
 	// Call the backup endpoint with a bad dbname
-	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msId, "rwehiu8**")
+	url := fmt.Sprintf("/admin/save/%s/%s/%s?mode=all", msId, dbName, "rwehiu8**")
 	req2, _ := http.NewRequest("GET", url, nil)
 	req2.Header.Set("y-access-token", token)
 	w2 := httptest.NewRecorder()
 	TestApp.Router.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusBadRequest, w2.Code)
 
-	require.Contains(t, w2.Body.String(), "Invalid data input for db param")
+	require.Contains(t, w2.Body.String(), "Invalid data input for table/collection param")
 
 }
