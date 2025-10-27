@@ -116,25 +116,41 @@ func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, db
 	return ""
 }
 
-func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
+// APICreateSaveRecordWithFixture creates a save via the public API and returns the save id.
+// It sets a MockCommandRunner fixture for the supplied command (e.g. "pg_dump" or "mongodump")
+// using the provided fixture filename. This is backward-compatible: tests that call the
+// existing APICreateSaveRecord keep the same behaviour.
+func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, msID, dbName, command, fixture string) string {
+	t.Helper()
+
+	// Set up command runner fixture for the requested command.
 	appInstance.CommandRunner = &MockCommandRunner{
 		T: t,
 		Fixtures: map[string]string{
-			"pg_dump": "reviews.dump",
+			command: fixture,
 		},
 	}
+
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	appInstance.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusCreated, w.Code)
+	require.Equal(t, http.StatusCreated, w.Code, "expected 201 Created from /admin/save; body: %s", w.Body.String())
+
 	var resp struct {
 		SaveID string `json:"save_id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.NotEmpty(t, resp.SaveID)
+	require.NotEmpty(t, resp.SaveID, "save_id must be present in response")
 	return resp.SaveID
+}
+
+// APICreateSaveRecord retains the original behaviour for postgres tests.
+// It delegates to APICreateSaveRecordWithFixture with the postgres defaults so existing callers are unchanged.
+func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
+	t.Helper()
+	return APICreateSaveRecordWithFixture(t, appInstance, token, msID, dbName, "pg_dump", "reviews.dump")
 }
 
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {

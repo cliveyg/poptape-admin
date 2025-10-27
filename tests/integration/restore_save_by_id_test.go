@@ -18,12 +18,12 @@ import (
 func TestRestorePostgresBySaveID_HappyPath(t *testing.T) {
 	a := testutils.SetupTestApp(t)
 
-	// ensure clean DBs
+	// ensure DBs are clean
 	testutils.ResetPostgresDB(t, a)
 	testutils.ResetMongoDB(t, a)
 
 	super := os.Getenv("SUPERUSER")
-	require.NotEmpty(t, super, "SUPERUSER env required for integration tests")
+	require.NotEmpty(t, super, "SUPERUSER env required")
 	token := testutils.LoginAndGetToken(t, a, super, os.Getenv("SUPERPASS"))
 
 	pgDB := os.Getenv("POSTGRES_DBNAME")
@@ -33,7 +33,7 @@ func TestRestorePostgresBySaveID_HappyPath(t *testing.T) {
 	msID := testutils.EnsureTestMicroserviceAndCred(t, a, token, pgDB, msName, "apiserver")
 	require.NotEmpty(t, msID)
 
-	// APICreateSaveRecord sets up a pg_dump fixture and returns the save_id
+	// Use existing helper for Postgres (unchanged behavior)
 	saveID := testutils.APICreateSaveRecord(t, a, token, msID, pgDB)
 	require.NotEmpty(t, saveID)
 
@@ -45,38 +45,34 @@ func TestRestorePostgresBySaveID_HappyPath(t *testing.T) {
 	a.Router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-
 	var resp map[string]interface{}
-	require.NoError(t, json.NewDecoder(bytes.NewReader(w.Body.Bytes())).Decode(&resp))
+	err := json.NewDecoder(bytes.NewReader(w.Body.Bytes())).Decode(&resp)
+	require.NoError(t, err)
 	require.Contains(t, resp["message"].(string), "Postgres restore succeeded")
 }
 
 func TestRestoreMongoBySaveID_HappyPath(t *testing.T) {
 	a := testutils.SetupTestApp(t)
 
-	// ensure clean DBs
+	// ensure DBs are clean
 	testutils.ResetPostgresDB(t, a)
 	testutils.ResetMongoDB(t, a)
 
 	super := os.Getenv("SUPERUSER")
-	require.NotEmpty(t, super, "SUPERUSER env required for integration tests")
+	require.NotEmpty(t, super, "SUPERUSER env required")
 	token := testutils.LoginAndGetToken(t, a, super, os.Getenv("SUPERPASS"))
 
 	mongoDB := os.Getenv("MONGO_DBNAME")
 	require.NotEmpty(t, mongoDB, "MONGO_DBNAME env required")
 
-	// Create Mongo creds + microservice using existing payload and API
-	// DefaultCreateCredsPayload already has type: "mongo"
+	// Create Mongo creds + microservice via existing payload and API (DefaultCreateCredsPayload)
 	payload := testutils.DefaultCreateCredsPayload()
 	msName := testutils.UniqueName("integ_mongo_ms")
 	payload["ms_name"] = msName
 	payload["db_name"] = mongoDB
 	payload["role_name"] = "items"
 
-	// Avoid real encryption in tests
-	cleanup := testutils.SetupEncryptPasswordMock()
-	defer cleanup()
-
+	// Avoid mocking encryption here; allow real handler to run EncryptCredPass
 	bodyBytes, _ := json.Marshal(payload)
 	reqCreate, _ := http.NewRequest("POST", "/admin/creds", bytes.NewReader(bodyBytes))
 	reqCreate.Header.Set("y-access-token", token)
@@ -107,36 +103,18 @@ func TestRestoreMongoBySaveID_HappyPath(t *testing.T) {
 	}
 	require.NotEmpty(t, msID)
 
-	// arrange mongodump fixture for backup
-	a.CommandRunner = &testutils.MockCommandRunner{
-		T: t,
-		Fixtures: map[string]string{
-			"mongodump": "reviews.archive",
-		},
-	}
-
-	// call backup endpoint for mongo and parse the returned save_id
-	saveURL := "/admin/save/" + msID + "/" + mongoDB + "?mode=all"
-	reqSave, _ := http.NewRequest("GET", saveURL, nil)
-	reqSave.Header.Set("y-access-token", token)
-	wSave := httptest.NewRecorder()
-	a.Router.ServeHTTP(wSave, reqSave)
-	require.Equal(t, http.StatusCreated, wSave.Code)
-
-	var saveResp struct {
-		SaveID string `json:"save_id"`
-	}
-	require.NoError(t, json.Unmarshal(wSave.Body.Bytes(), &saveResp))
-	require.NotEmpty(t, saveResp.SaveID)
+	// Use the generalized helper to create a save using the mongodump fixture
+	saveID := testutils.APICreateSaveRecordWithFixture(t, a, token, msID, mongoDB, "mongodump", "reviews.archive")
+	require.NotEmpty(t, saveID)
 
 	// Now restore by id
-	loadURL := "/admin/load/data/" + saveResp.SaveID
+	loadURL := "/admin/load/data/" + saveID
 	req, _ := http.NewRequest("GET", loadURL, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	a.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
 
+	require.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Contains(t, resp["message"].(string), "Mongo restore succeeded")
@@ -168,7 +146,6 @@ func TestRestoreBySaveID_SaveNotFound(t *testing.T) {
 	require.NotEmpty(t, super, "SUPERUSER env required")
 	token := testutils.LoginAndGetToken(t, a, super, os.Getenv("SUPERPASS"))
 
-	// random uuid unlikely to exist
 	rid := uuid.New().String()
 	loadURL := "/admin/load/data/" + rid
 	req, _ := http.NewRequest("GET", loadURL, nil)
@@ -191,9 +168,6 @@ func TestRestoreBySaveID_GridFSFileMissing(t *testing.T) {
 	require.NotEmpty(t, mongoDB, "MONGO_DBNAME env required")
 
 	// Create mongo creds + ms using DefaultCreateCredsPayload via API
-	cleanup := testutils.SetupEncryptPasswordMock()
-	defer cleanup()
-
 	payload := testutils.DefaultCreateCredsPayload()
 	msName := testutils.UniqueName("integ_missing_file_ms")
 	payload["ms_name"] = msName
@@ -261,11 +235,11 @@ func TestRestoreBySaveID_ForbiddenUser(t *testing.T) {
 	msID := testutils.EnsureTestMicroserviceAndCred(t, a, superToken, pgDB, msName, "apiserver")
 	require.NotEmpty(t, msID)
 
-	// create save as super (APICreateSaveRecord sets pg_dump fixture)
+	// Create save as super (APICreateSaveRecord sets pg_dump fixture)
 	saveID := testutils.APICreateSaveRecord(t, a, superToken, msID, pgDB)
 	require.NotEmpty(t, saveID)
 
-	// create a user with a role that doesn't include the ms role (e.g. "aws")
+	// create a user with role that doesn't include the ms role (e.g. "aws")
 	var role app.Role
 	res := a.DB.First(&role, "name = ?", "aws")
 	require.NoError(t, res.Error)
