@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// Note: This file preserves all original helpers and adds APICreateSaveRecordWithFixture
+// in a backward-compatible manner. Existing APICreateSaveRecord behavior is kept.
+
 func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
@@ -118,8 +121,8 @@ func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, db
 
 // APICreateSaveRecordWithFixture creates a save via the public API and returns the save id.
 // It sets a MockCommandRunner fixture for the supplied command (e.g. "pg_dump" or "mongodump")
-// using the provided fixture filename. This is backward-compatible: tests that call the
-// existing APICreateSaveRecord keep the same behaviour.
+// using the provided fixture filename. Backwards-compatible: APICreateSaveRecord still calls this
+// with the postgres defaults so existing callers are not changed.
 func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, msID, dbName, command, fixture string) string {
 	t.Helper()
 
@@ -136,18 +139,16 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	appInstance.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusCreated, w.Code, "expected 201 Created from /admin/save; body: %s", w.Body.String())
-
+	require.Equal(t, http.StatusCreated, w.Code)
 	var resp struct {
 		SaveID string `json:"save_id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.NotEmpty(t, resp.SaveID, "save_id must be present in response")
+	require.NotEmpty(t, resp.SaveID)
 	return resp.SaveID
 }
 
-// APICreateSaveRecord retains the original behaviour for postgres tests.
-// It delegates to APICreateSaveRecordWithFixture with the postgres defaults so existing callers are unchanged.
+// APICreateSaveRecord retains original behavior for postgres tests.
 func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
 	t.Helper()
 	return APICreateSaveRecordWithFixture(t, appInstance, token, msID, dbName, "pg_dump", "reviews.dump")
