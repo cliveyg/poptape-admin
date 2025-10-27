@@ -101,15 +101,14 @@ func TestRestoreMongoBySaveID_HappyPath(t *testing.T) {
 	}
 	require.NotEmpty(t, msID)
 
-	// Mirror Postgres approach:
-	// Use MockCommandRunner to supply mongodump fixture as stdout for the backup step.
-	// APICreateSaveRecordWithFixture will set a.CommandRunner to the provided fixture.
+	// Use APICreateSaveRecordWithFixture which now:
+	//  - sets a MockCommandRunner with the mongodump fixture (fotos.dump)
+	//  - automatically stubs hooks (WriteMongoOut/CreateGridFSUploadStream/CopyToGridFS/SaveWithAutoVersion)
+	// so no real Mongo network connection is attempted.
 	saveID := testutils.APICreateSaveRecordWithFixture(t, a, token, msID, mongoDB, "mongodump", "fotos.dump")
 	require.NotEmpty(t, saveID)
 
-	// Restore by save id. The restore path will use the command runner (mongorestore) which
-	// is provided by the MockCommandRunner; the MockCommandRunner is tolerant for missing fixtures
-	// and provides harmless MockCmds for commands we don't explicitly fixture.
+	// Now restore by id
 	loadURL := "/admin/load/data/" + saveID
 	req, _ := http.NewRequest("GET", loadURL, nil)
 	req.Header.Set("y-access-token", token)

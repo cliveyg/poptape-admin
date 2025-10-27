@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +16,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 )
 
 func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
@@ -119,8 +122,12 @@ func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, db
 
 // APICreateSaveRecordWithFixture creates a save via the public API and returns the save id.
 // It sets a MockCommandRunner fixture for the supplied command (e.g. "pg_dump" or "mongodump")
-// using the provided fixture filename. This is backward-compatible: tests that call the
-// existing APICreateSaveRecord keep the same behaviour.
+// using the provided fixture filename.
+//
+// When command == "mongodump" this helper also automatically installs safe MockHooks
+// for WriteMongoOut, CreateGridFSUploadStream, CopyToGridFS and SaveWithAutoVersion so that
+// the test will not attempt real Mongo connections or GridFS writes. The original Hooks are
+// restored via t.Cleanup after the function returns.
 func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, msID, dbName, command, fixture string) string {
 	t.Helper()
 
@@ -130,6 +137,38 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 		Fixtures: map[string]string{
 			command: fixture,
 		},
+	}
+
+	// If using mongodump, automatically stub hooks to avoid any real Mongo driver usage.
+	if command == "mongodump" {
+		origHooks := appInstance.Hooks
+		t.Cleanup(func() {
+			appInstance.Hooks = origHooks
+		})
+
+		// Create test hooks that mirror the unit-test mocks: don't connect to real Mongo,
+		// consume the mongodump fixture stream and return counts / success.
+		hooks := &MockHooks{}
+		// Prevent WriteMongoOut from creating a mongo.Client and pinging — return success.
+		hooks.WriteMongoOutFunc = func(args *app.WriteMongoArgs) (string, error) {
+			return "OK", nil
+		}
+		// Prevent GridFS writes: return nil upload stream (backup code will still call CopyToGridFS)
+		hooks.CreateGridFSUploadStreamFunc = func(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
+			return nil, nil
+		}
+		// CopyToGridFS consumes the stdout (fixture) and returns number of bytes read.
+		hooks.CopyToGridFSFunc = func(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
+			n, err := io.Copy(io.Discard, stdout)
+			return n, err
+		}
+		// Ensure saving the SaveRecord doesn't error during tests
+		hooks.SaveWithAutoVersionFunc = func(sr *app.SaveRecord) error {
+			// If an app.Hooks.SaveWithAutoVersion is required by other tests to write DB records,
+			// the original is restored by t.Cleanup above.
+			return nil
+		}
+		appInstance.Hooks = hooks
 	}
 
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
