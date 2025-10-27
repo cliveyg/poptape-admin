@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -19,10 +20,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 )
-
-// -----------------------------------------------------------------------------
-// Basic helpers (unchanged behavior)
-// -----------------------------------------------------------------------------
 
 func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
 	loginReq := map[string]string{
@@ -124,14 +121,9 @@ func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, db
 	return ""
 }
 
-// -----------------------------------------------------------------------------
-// APICreateSaveRecordWithFixture + convenience APICreateSaveRecord
-// -----------------------------------------------------------------------------
-
 func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, msID, dbName, command, fixture string) string {
 	t.Helper()
 
-	// configure the MockCommandRunner fixture for the requested command
 	appInstance.CommandRunner = &MockCommandRunner{
 		T: t,
 		Fixtures: map[string]string{
@@ -139,57 +131,48 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 		},
 	}
 
-	// If using mongodump, set safe hooks to avoid real Mongo network/driver usage.
-	// Save original hooks and restore on cleanup.
 	if command == "mongodump" {
 		origHooks := appInstance.Hooks
 		t.Cleanup(func() {
 			appInstance.Hooks = origHooks
 		})
 
-		// Create MockHooks and wire up functions.
 		hooks := &MockHooks{}
 
-		// PrepSaveRestore: prefer delegating to origHooks.PrepSaveRestore if available
 		hooks.PrepSaveRestoreFunc = func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult {
 			if origHooks != nil {
-				// Delegate to original hooks to perform normal validation and selection logic
 				return origHooks.PrepSaveRestore(args)
 			}
-			// Fallback: return an OK result with minimal data (most tests create creds via API so DB will contain expected rows)
 			return &app.PrepSaveRestoreResult{
 				StatusCode: http.StatusOK,
 				Error:      nil,
 			}
 		}
 
-		// WriteMongoOut: do not call the real mongo driver - return OK.
+		hooks.BackupMongoFunc = func(args *app.BackupDBArgs) error {
+			return appInstance.BackupMongo(args)
+		}
+
 		hooks.WriteMongoOutFunc = func(args *app.WriteMongoArgs) (string, error) {
 			return "OK", nil
 		}
 
-		// Prevent GridFS upload creation: return nil stream (backup code will pass stdout reader to CopyToGridFS)
 		hooks.CreateGridFSUploadStreamFunc = func(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
 			return nil, nil
 		}
 
-		// CopyToGridFS: consume the stdout (fixture) and return number of bytes consumed
 		hooks.CopyToGridFSFunc = func(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
 			n, err := io.Copy(io.Discard, stdout)
 			return n, err
 		}
 
-		// SaveWithAutoVersion: no-op (the app code may still want to insert a SaveRecord; many tests mock DB calls)
 		hooks.SaveWithAutoVersionFunc = func(sr *app.SaveRecord) error {
-			// If the original Hooks.SaveWithAutoVersion is present, prefer delegating to it to persist DB records.
 			if origHooks != nil {
 				return origHooks.SaveWithAutoVersion(sr)
 			}
 			return nil
 		}
 
-		// Ensure other Hook methods that might be called are delegated to origHooks where possible.
-		// For safety, delegate IOCopy if available (most code uses a.Hooks.IOCopy).
 		hooks.IOCopyFunc = func(dst io.Writer, src io.Reader) (int64, error) {
 			if origHooks != nil {
 				return origHooks.IOCopy(dst, src)
@@ -197,10 +180,31 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 			return io.Copy(dst, src)
 		}
 
+		hooks.BackupPostgresFunc = func(args *app.BackupDBArgs) error {
+			return nil
+		}
+		hooks.RestoreMongoFunc = func(args *app.RestoreDBArgs) (int, string) {
+			return appInstance.RestoreMongo(args)
+		}
+		hooks.RestorePostgresFunc = func(args *app.RestoreDBArgs) (int, string) {
+			return appInstance.RestorePostgres(args)
+		}
+		hooks.DeleteGridFSBySaveIDFunc = func(ctx *context.Context, saveId, DBName string) error {
+			if origHooks != nil {
+				return origHooks.DeleteGridFSBySaveID(ctx, saveId, DBName)
+			}
+			return nil
+		}
+		hooks.UserHasCorrectAccessFunc = func(svRec *app.SaveRecord, u *app.User) (int, error) {
+			if origHooks != nil {
+				return origHooks.UserHasCorrectAccess(svRec, u)
+			}
+			return http.StatusOK, nil
+		}
+
 		appInstance.Hooks = hooks
 	}
 
-	// Call the save endpoint to trigger the backup flow
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
@@ -216,16 +220,10 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 	return resp.SaveID
 }
 
-// APICreateSaveRecord retains the original behaviour for postgres tests.
-// It delegates to APICreateSaveRecordWithFixture with the postgres defaults so existing callers are unchanged.
 func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
 	t.Helper()
 	return APICreateSaveRecordWithFixture(t, appInstance, token, msID, dbName, "pg_dump", "reviews.dump")
 }
-
-// -----------------------------------------------------------------------------
-// Misc helpers (unchanged)
-// -----------------------------------------------------------------------------
 
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	var resp struct {
@@ -249,7 +247,6 @@ func UniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, uuid.New().String())
 }
 
-// ExtractJSONResponse unmarshals the body of a ResponseRecorder into a map.
 func ExtractJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
 	var out map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &out)
@@ -257,8 +254,6 @@ func ExtractJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]
 	return out
 }
 
-// SetupEncryptPasswordMock replaces app.EncryptCredPass with a mock that always returns a fixed encrypted value.
-// Returns a cleanup function to restore the original after the test.
 func SetupEncryptPasswordMock() func() {
 	original := app.EncryptCredPass
 	app.EncryptCredPass = func(cr *app.Cred) error {
@@ -274,13 +269,11 @@ func CreateTestUserBasic(name string) app.User {
 		Username:  name,
 		Active:    true,
 		Validated: true,
-		Roles:     []app.Role{{Name: "admin"}}, // Always at least one role
+		Roles:     []app.Role{{Name: "admin"}},
 	}
 }
 
-// NewSignupPayload returns a signup payload with password base64 encoded.
 func NewSignupPayload(username, password, confirm string) map[string]string {
-	// Only encode if password is not already encoded
 	encode := func(s string) string {
 		if _, err := base64.StdEncoding.DecodeString(s); err != nil {
 			return base64.StdEncoding.EncodeToString([]byte(s))
