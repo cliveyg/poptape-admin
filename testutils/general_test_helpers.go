@@ -20,6 +20,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 )
 
+// -----------------------------------------------------------------------------
+// Basic helpers (unchanged behavior)
+// -----------------------------------------------------------------------------
+
 func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
 	loginReq := map[string]string{
 		"username": username,
@@ -120,18 +124,14 @@ func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, db
 	return ""
 }
 
-// APICreateSaveRecordWithFixture creates a save via the public API and returns the save id.
-// It sets a MockCommandRunner fixture for the supplied command (e.g. "pg_dump" or "mongodump")
-// using the provided fixture filename.
-//
-// When command == "mongodump" this helper also automatically installs safe MockHooks
-// for WriteMongoOut, CreateGridFSUploadStream, CopyToGridFS and SaveWithAutoVersion so that
-// the test will not attempt real Mongo connections or GridFS writes. The original Hooks are
-// restored via t.Cleanup after the function returns.
+// -----------------------------------------------------------------------------
+// APICreateSaveRecordWithFixture + convenience APICreateSaveRecord
+// -----------------------------------------------------------------------------
+
 func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, msID, dbName, command, fixture string) string {
 	t.Helper()
 
-	// Set up command runner fixture for the requested command.
+	// configure the MockCommandRunner fixture for the requested command
 	appInstance.CommandRunner = &MockCommandRunner{
 		T: t,
 		Fixtures: map[string]string{
@@ -139,38 +139,68 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 		},
 	}
 
-	// If using mongodump, automatically stub hooks to avoid any real Mongo driver usage.
+	// If using mongodump, set safe hooks to avoid real Mongo network/driver usage.
+	// Save original hooks and restore on cleanup.
 	if command == "mongodump" {
 		origHooks := appInstance.Hooks
 		t.Cleanup(func() {
 			appInstance.Hooks = origHooks
 		})
 
-		// Create test hooks that mirror the unit-test mocks: don't connect to real Mongo,
-		// consume the mongodump fixture stream and return counts / success.
+		// Create MockHooks and wire up functions.
 		hooks := &MockHooks{}
-		// Prevent WriteMongoOut from creating a mongo.Client and pinging — return success.
+
+		// PrepSaveRestore: prefer delegating to origHooks.PrepSaveRestore if available
+		hooks.PrepSaveRestoreFunc = func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult {
+			if origHooks != nil {
+				// Delegate to original hooks to perform normal validation and selection logic
+				return origHooks.PrepSaveRestore(args)
+			}
+			// Fallback: return an OK result with minimal data (most tests create creds via API so DB will contain expected rows)
+			return &app.PrepSaveRestoreResult{
+				StatusCode: http.StatusOK,
+				Error:      nil,
+			}
+		}
+
+		// WriteMongoOut: do not call the real mongo driver - return OK.
 		hooks.WriteMongoOutFunc = func(args *app.WriteMongoArgs) (string, error) {
 			return "OK", nil
 		}
-		// Prevent GridFS writes: return nil upload stream (backup code will still call CopyToGridFS)
+
+		// Prevent GridFS upload creation: return nil stream (backup code will pass stdout reader to CopyToGridFS)
 		hooks.CreateGridFSUploadStreamFunc = func(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
 			return nil, nil
 		}
-		// CopyToGridFS consumes the stdout (fixture) and returns number of bytes read.
+
+		// CopyToGridFS: consume the stdout (fixture) and return number of bytes consumed
 		hooks.CopyToGridFSFunc = func(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
 			n, err := io.Copy(io.Discard, stdout)
 			return n, err
 		}
-		// Ensure saving the SaveRecord doesn't error during tests
+
+		// SaveWithAutoVersion: no-op (the app code may still want to insert a SaveRecord; many tests mock DB calls)
 		hooks.SaveWithAutoVersionFunc = func(sr *app.SaveRecord) error {
-			// If an app.Hooks.SaveWithAutoVersion is required by other tests to write DB records,
-			// the original is restored by t.Cleanup above.
+			// If the original Hooks.SaveWithAutoVersion is present, prefer delegating to it to persist DB records.
+			if origHooks != nil {
+				return origHooks.SaveWithAutoVersion(sr)
+			}
 			return nil
 		}
+
+		// Ensure other Hook methods that might be called are delegated to origHooks where possible.
+		// For safety, delegate IOCopy if available (most code uses a.Hooks.IOCopy).
+		hooks.IOCopyFunc = func(dst io.Writer, src io.Reader) (int64, error) {
+			if origHooks != nil {
+				return origHooks.IOCopy(dst, src)
+			}
+			return io.Copy(dst, src)
+		}
+
 		appInstance.Hooks = hooks
 	}
 
+	// Call the save endpoint to trigger the backup flow
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
@@ -192,6 +222,10 @@ func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName
 	t.Helper()
 	return APICreateSaveRecordWithFixture(t, appInstance, token, msID, dbName, "pg_dump", "reviews.dump")
 }
+
+// -----------------------------------------------------------------------------
+// Misc helpers (unchanged)
+// -----------------------------------------------------------------------------
 
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
 	var resp struct {

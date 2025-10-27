@@ -103,8 +103,7 @@ func TestRestoreMongoBySaveID_HappyPath(t *testing.T) {
 
 	// Use APICreateSaveRecordWithFixture which now:
 	//  - sets a MockCommandRunner with the mongodump fixture (fotos.dump)
-	//  - automatically stubs hooks (WriteMongoOut/CreateGridFSUploadStream/CopyToGridFS/SaveWithAutoVersion)
-	// so no real Mongo network connection is attempted.
+	//  - automatically stubs necessary hooks to avoid real Mongo network I/O
 	saveID := testutils.APICreateSaveRecordWithFixture(t, a, token, msID, mongoDB, "mongodump", "fotos.dump")
 	require.NotEmpty(t, saveID)
 
