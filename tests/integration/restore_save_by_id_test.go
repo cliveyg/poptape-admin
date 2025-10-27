@@ -17,7 +17,6 @@ import (
 
 func TestRestorePostgresBySaveID_HappyPath(t *testing.T) {
 	a := testutils.SetupTestApp(t)
-	a.Hooks = a
 
 	// ensure clean DBs
 	testutils.ResetPostgresDB(t, a)
