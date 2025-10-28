@@ -239,6 +239,8 @@ func TestRestoreBySaveID_ForbiddenUser(t *testing.T) {
 	res = a.DB.Create(&newUser)
 	require.NoError(t, res.Error)
 
+	testutils.SetUserValidated(t, a, newUser.Username)
+
 	token, err := utils.GenerateToken(newUser.Username, newUser.AdminId)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
