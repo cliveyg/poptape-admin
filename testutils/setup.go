@@ -38,6 +38,7 @@ func SetupTestApp(t *testing.T) *app.App {
 	a := &app.App{}
 	a.Log = SetupLogger()
 	a.CommandRunner = &app.RealCommandRunner{}
+	a.Hooks = a
 	a.InitialiseApp()
 	return a
 }

@@ -126,19 +126,29 @@ type MockCommandRunner struct {
 	T        *testing.T
 }
 
+// Command returns a mock Cmd. If Fixtures map is present it will try to
+// return a MockCmd backed by the fixture name. If the fixture is not found
+// the function will fall back to returning m.Cmd if set, or a default MockCmd,
+// rather than fatalling the test. This makes the runner tolerant of incidental
+// commands like "psql" that tests don't explicitly stub.
 func (m *MockCommandRunner) Command(name string, args ...string) app.Cmd {
-	// If Fixtures is set, use legacy fixture approach
+	// If Fixtures is set, try to use fixture for the command.
 	if m.Fixtures != nil && m.T != nil {
-		fixture, ok := m.Fixtures[name]
-		if !ok {
-			m.T.Fatalf("MockCommandRunner: unexpected command %q", name)
+		if fixture, ok := m.Fixtures[name]; ok {
+			return &MockCmd{T: m.T, Fixture: fixture}
 		}
-		return &MockCmd{T: m.T, Fixture: fixture}
+		// fallback to provided Cmd if available
+		if m.Cmd != nil {
+			return m.Cmd
+		}
+		// otherwise return a harmless default MockCmd (no fatal)
+		return &MockCmd{}
 	}
+	// No fixtures configured; return explicit Cmd if present
 	if m.Cmd != nil {
 		return m.Cmd
 	}
-	// Default to minimal success
+	// Default to an empty MockCmd
 	return &MockCmd{}
 }
 

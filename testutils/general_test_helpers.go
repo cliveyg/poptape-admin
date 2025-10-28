@@ -2,18 +2,23 @@ package testutils
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"math/rand"
-	"net/http"
-	"net/http/httptest"
 	"sync"
-	"testing"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 )
 
 func LoginAndGetToken(t *testing.T, testApp *app.App, username, password string) string {
@@ -116,25 +121,104 @@ func EnsureTestMicroserviceAndCred(t *testing.T, appInstance *app.App, token, db
 	return ""
 }
 
-func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
+func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, msID, dbName, command, fixture string) string {
+	t.Helper()
+
 	appInstance.CommandRunner = &MockCommandRunner{
 		T: t,
 		Fixtures: map[string]string{
-			"pg_dump": "reviews.dump",
+			command: fixture,
 		},
 	}
+
+	if command == "mongodump" {
+		origHooks := appInstance.Hooks
+		t.Cleanup(func() {
+			appInstance.Hooks = origHooks
+		})
+
+		hooks := &MockHooks{}
+
+		hooks.PrepSaveRestoreFunc = func(args *app.PrepSaveRestoreArgs) *app.PrepSaveRestoreResult {
+			if origHooks != nil {
+				return origHooks.PrepSaveRestore(args)
+			}
+			return &app.PrepSaveRestoreResult{
+				StatusCode: http.StatusOK,
+				Error:      nil,
+			}
+		}
+
+		hooks.BackupMongoFunc = func(args *app.BackupDBArgs) error {
+			return appInstance.BackupMongo(args)
+		}
+
+		hooks.WriteMongoOutFunc = func(args *app.WriteMongoArgs) (string, error) {
+			return "OK", nil
+		}
+
+		hooks.CreateGridFSUploadStreamFunc = func(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
+			return appInstance.CreateGridFSUploadStream(db, filename, metadata)
+		}
+
+		hooks.CopyToGridFSFunc = func(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
+			return appInstance.CopyToGridFS(uploadStream, stdout, logPrefix)
+		}
+
+		hooks.SaveWithAutoVersionFunc = func(sr *app.SaveRecord) error {
+			return appInstance.SaveWithAutoVersion(sr)
+		}
+
+		hooks.IOCopyFunc = func(dst io.Writer, src io.Reader) (int64, error) {
+			if origHooks != nil {
+				return origHooks.IOCopy(dst, src)
+			}
+			return io.Copy(dst, src)
+		}
+
+		hooks.BackupPostgresFunc = func(args *app.BackupDBArgs) error {
+			return nil
+		}
+		hooks.RestoreMongoFunc = func(args *app.RestoreDBArgs) (int, string) {
+			return appInstance.RestoreMongo(args)
+		}
+		hooks.RestorePostgresFunc = func(args *app.RestoreDBArgs) (int, string) {
+			return appInstance.RestorePostgres(args)
+		}
+		hooks.DeleteGridFSBySaveIDFunc = func(ctx *context.Context, saveId, DBName string) error {
+			if origHooks != nil {
+				return origHooks.DeleteGridFSBySaveID(ctx, saveId, DBName)
+			}
+			return nil
+		}
+		hooks.UserHasCorrectAccessFunc = func(svRec *app.SaveRecord, u *app.User) (int, error) {
+			if origHooks != nil {
+				return origHooks.UserHasCorrectAccess(svRec, u)
+			}
+			return http.StatusOK, nil
+		}
+
+		appInstance.Hooks = hooks
+	}
+
 	url := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, dbName)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("y-access-token", token)
 	w := httptest.NewRecorder()
 	appInstance.Router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusCreated, w.Code)
+	require.Equal(t, http.StatusCreated, w.Code, "expected 201 Created from /admin/save; body: %s", w.Body.String())
+
 	var resp struct {
 		SaveID string `json:"save_id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.NotEmpty(t, resp.SaveID)
+	require.NotEmpty(t, resp.SaveID, "save_id must be present in response")
 	return resp.SaveID
+}
+
+func APICreateSaveRecord(t *testing.T, appInstance *app.App, token, msID, dbName string) string {
+	t.Helper()
+	return APICreateSaveRecordWithFixture(t, appInstance, token, msID, dbName, "pg_dump", "reviews.dump")
 }
 
 func ExtractSavesList(t *testing.T, body []byte) ([]app.SaveRecord, int) {
@@ -159,7 +243,6 @@ func UniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, uuid.New().String())
 }
 
-// ExtractJSONResponse unmarshals the body of a ResponseRecorder into a map.
 func ExtractJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
 	var out map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &out)
@@ -167,8 +250,6 @@ func ExtractJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]
 	return out
 }
 
-// SetupEncryptPasswordMock replaces app.EncryptCredPass with a mock that always returns a fixed encrypted value.
-// Returns a cleanup function to restore the original after the test.
 func SetupEncryptPasswordMock() func() {
 	original := app.EncryptCredPass
 	app.EncryptCredPass = func(cr *app.Cred) error {
@@ -184,13 +265,11 @@ func CreateTestUserBasic(name string) app.User {
 		Username:  name,
 		Active:    true,
 		Validated: true,
-		Roles:     []app.Role{{Name: "admin"}}, // Always at least one role
+		Roles:     []app.Role{{Name: "admin"}},
 	}
 }
 
-// NewSignupPayload returns a signup payload with password base64 encoded.
 func NewSignupPayload(username, password, confirm string) map[string]string {
-	// Only encode if password is not already encoded
 	encode := func(s string) string {
 		if _, err := base64.StdEncoding.DecodeString(s); err != nil {
 			return base64.StdEncoding.EncodeToString([]byte(s))
