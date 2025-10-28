@@ -304,7 +304,7 @@ jobs:
         run: go tool cover -func=total.cover.out
 
       - name: Generate Total HTML coverage report
-        if: env.RUN_INT_TESTS == 'true'
+        if: env.RUN_TOTAL_TESTS == 'true'
         run: |
           go tool cover -html=total.cover.out -o total.coverage.html
 
