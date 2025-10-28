@@ -3,47 +3,27 @@ package testutils
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"log"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+
 	"github.com/cliveyg/poptape-admin/app"
 	"github.com/cliveyg/poptape-admin/awsutil"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"gorm.io/gorm"
-	"log"
-	"os"
-	"time"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
-	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
-// GetAWSIAMClient returns a configured IAM client for LocalStack.
-func GetAWSIAMClient(ctx context.Context) *iam.Client {
-	awsEndpoint := os.Getenv("AWS_ENDPOINT_URL")
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = "us-east-1"
-	}
+// Integration helpers keep concrete SDK signatures so existing integration tests do not need changes.
 
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(region),
-		config.WithEndpointResolverWithOptions(
-			aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-				if awsEndpoint != "" {
-					return aws.Endpoint{
-						URL:           awsEndpoint,
-						SigningRegion: region,
-					}, nil
-				}
-				return aws.Endpoint{}, &aws.EndpointNotFoundError{}
-			}),
-		),
-	)
+// GetAWSIAMClient returns a configured IAM client for LocalStack or real AWS depending on env.
+func GetAWSIAMClient(ctx context.Context) *iam.Client {
+	cfg, err := LoadDefaultAWSConfig(ctx)
 	if err != nil {
 		log.Fatalf("unable to load SDK config for test: %v", err)
 	}
@@ -78,7 +58,6 @@ func SeedIAMUsers(ctx context.Context, client *iam.Client, usernames []string, p
 
 // ClearAllIAMUsers deletes all IAM users from LocalStack.
 func ClearAllIAMUsers(ctx context.Context, client *iam.Client) {
-	// List all users
 	output, err := client.ListUsers(ctx, &iam.ListUsersInput{})
 	if err != nil {
 		log.Fatalf("failed to list IAM users: %v", err)
@@ -107,6 +86,7 @@ func WaitForLocalStackIAM(ctx context.Context, client *iam.Client, timeout time.
 	return context.DeadlineExceeded
 }
 
+// SeedIAMUsersWithPaths seeds users with specific paths and returns cleanup func.
 func SeedIAMUsersWithPaths(ctx context.Context, client *iam.Client, users map[string]string) (cleanup func()) {
 	created := []string{}
 	for username, path := range users {
@@ -132,7 +112,7 @@ func SeedIAMUsersWithPaths(ctx context.Context, client *iam.Client, users map[st
 }
 
 // GetAllIAMUsers fetches all IAM users from LocalStack (for assertions/debug).
-func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]types.User, error) {
+func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]iamtypes.User, error) {
 	out, err := client.ListUsers(ctx, &iam.ListUsersInput{})
 	if err != nil {
 		return nil, err
@@ -140,14 +120,13 @@ func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]types.User, erro
 	return out.Users, nil
 }
 
-// GetAWSS3Client returns a real or localstack S3 client for integration tests.
+// GetAWSS3Client returns a configured S3 client for LocalStack (concrete *s3.Client).
 func GetAWSS3Client(ctx context.Context) *s3.Client {
-	logger := zerolog.New(os.Stdout)
-	aw, err := awsutil.NewAWSAdmin(ctx, &logger)
+	cfg, err := LoadDefaultAWSConfig(ctx)
 	if err != nil {
-		panic(err)
+		log.Fatalf("unable to load SDK config for test: %v", err)
 	}
-	return aw.S3
+	return s3.NewFromConfig(cfg)
 }
 
 // CreateS3Bucket creates a bucket by name (ignores errors if already exists).
@@ -193,7 +172,7 @@ func SeedS3Buckets(ctx context.Context, s3Client *s3.Client, bucketNames []strin
 }
 
 // MockAWSAdminError is a test utility mock for AWSAdminInterface that always returns an error from ListAllUsers.
-// All other interface methods are stubbed out with zero values.
+// Kept for compatibility with existing integration tests that use it.
 type MockAWSAdminError struct{}
 
 func (m *MockAWSAdminError) TestConnection(ctx context.Context) error {
@@ -228,6 +207,9 @@ func (m *MockAWSAdminError) ListAllStandardBuckets(ctx context.Context) ([]s3typ
 	return nil, fmt.Errorf("mock AWS ListAllStandardBuckets error")
 }
 
+// Compile-time interface check (keeps integration tests that depend on this type compiling).
+var _ awsutil.AWSAdminInterface = (*MockAWSAdminError)(nil)
+
 // MakeTestUser returns a valid test user with the "super" role.
 func MakeTestUser() app.User {
 	return app.User{
@@ -244,6 +226,7 @@ func MakeTestUser() app.User {
 	}
 }
 
+// NewTestAppWithMockAWS returns a shallow-copied App with AWS replaced by MockAWSAdminError.
 func NewTestAppWithMockAWS(TestApp *app.App) *app.App {
 	return &app.App{
 		Router:        gin.New(),
