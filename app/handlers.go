@@ -504,34 +504,6 @@ func (a *App) BackupDB(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
-// RestoreDB
-//-----------------------------------------------------------------------------
-
-func (a *App) RestoreDB(c *gin.Context) {
-	a.Log.Debug().Msg("In RestoreDB")
-
-	restoreArgs := &PrepSaveRestoreArgs{
-		Ctx:     c,
-		DBName:  c.Param("db"),
-		TabColl: c.Param("tab"),
-		Mode:    c.Query("mode"),
-	}
-	result := a.Hooks.PrepSaveRestore(restoreArgs)
-	if result.Error != nil {
-		c.JSON(result.StatusCode, gin.H{"message": result.Error.Error()})
-		return
-	}
-
-	msId := result.MSId
-	dbName := result.DBName
-	tabColl := result.TabColl
-	mode := result.Mode
-
-	a.Log.Debug().Msgf("Input vars are: msId [%s], db [%s], tab [%s], mode [%s]", msId.String(), dbName, tabColl, mode)
-	c.JSON(http.StatusTeapot, gin.H{"message": "Moop"})
-}
-
-//-----------------------------------------------------------------------------
 // ListMicroservices
 //-----------------------------------------------------------------------------
 
@@ -857,27 +829,11 @@ func (a *App) ListAllSaves(c *gin.Context) {
 }
 
 //-----------------------------------------------------------------------------
-// DeleteByDB
-//-----------------------------------------------------------------------------
-
-func (a *App) DeleteByDB(c *gin.Context) {
-	c.JSON(http.StatusLocked, gin.H{"message": "Danger! Will Smith; Danger!"})
-}
-
-//-----------------------------------------------------------------------------
 // RestoreSystemByDataSet
 //-----------------------------------------------------------------------------
 
 func (a *App) RestoreSystemByDataSet(c *gin.Context) {
 	c.JSON(http.StatusLocked, gin.H{"message": "Danger! Will Smith; Danger!"})
-}
-
-//-----------------------------------------------------------------------------
-// SystemWipe
-//-----------------------------------------------------------------------------
-
-func (a *App) SystemWipe(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "wibble"})
 }
 
 //-----------------------------------------------------------------------------

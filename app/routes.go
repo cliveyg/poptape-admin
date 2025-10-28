@@ -79,17 +79,6 @@ func (a *App) InitialiseRoutes() {
 		a.BackupDB(c)
 	})
 
-	// load specific db
-	a.Router.GET("/admin/load/:msId/:db", a.AuthMiddleware(true), a.AccessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.Log.Info().Msg("load latest version specific db")
-		a.RestoreDB(c)
-	})
-
-	// load specific db table/collection
-	a.Router.GET("/admin/load/:msId/:db/:tab", a.AuthMiddleware(true), a.AccessControlMiddleware([]string{"super", "admin"}), func(c *gin.Context) {
-		a.RestoreDB(c)
-	})
-
 	//-----------------------------------------------------------------
 	// credentials routes
 	//-----------------------------------------------------------------
@@ -156,19 +145,9 @@ func (a *App) InitialiseRoutes() {
 	// superuser routes
 	//-----------------------------------------------------------------
 
-	// wipe entire system - use carefully
-	a.Router.GET("/admin/clearall", a.AuthMiddleware(false), a.AccessControlMiddleware([]string{"super"}), func(c *gin.Context) {
-		a.SystemWipe(c)
-	})
-
 	// load entire system based on the dataset number - superuser only
 	a.Router.GET("/admin/load/dataset/:dset", a.AuthMiddleware(false), a.AccessControlMiddleware([]string{"super"}), func(c *gin.Context) {
 		a.RestoreSystemByDataSet(c)
-	})
-
-	// delete all mongo records and set all postgres records for db to invalid - superuser only
-	a.Router.DELETE("/admin/:msId/:db", a.AuthMiddleware(false), a.AccessControlMiddleware([]string{"super"}), func(c *gin.Context) {
-		a.DeleteByDB(c)
 	})
 
 	//-----------------------------------------------------------------
