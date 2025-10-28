@@ -274,7 +274,7 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          go test -v ./tests -cover -coverpkg=./... -coverprofile=total.cover.out | tee total.test.out
+          go test -v ./tests/... -cover -coverpkg=./... -coverprofile=total.cover.out | tee total.test.out
           grep -v '/tests/' total.cover.out | grep -v '/testutils/' > total.cover.out.filtered
           mv total.cover.out.filtered total.cover.out
         shell: bash
