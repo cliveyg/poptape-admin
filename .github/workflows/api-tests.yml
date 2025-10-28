@@ -119,8 +119,9 @@ jobs:
 
       - name: Set unit and integration test flags
         run: |
-          echo "RUN_UNIT_TESTS=true" >> $GITHUB_ENV
-          echo "RUN_INT_TESTS=true" >> $GITHUB_ENV
+          echo "RUN_UNIT_TESTS=false" >> $GITHUB_ENV
+          echo "RUN_INT_TESTS=false" >> $GITHUB_ENV
+          echo "RUN_TOTAL_TESTS=true" >> $GITHUB_ENV
           touch poptape_admin.log
 
       ##########################################
@@ -263,3 +264,73 @@ jobs:
           gist-id: ${{ secrets.INT_TEST_GIST_ID }}
           token: ${{ secrets.GIST_TOKEN }}
           prefix: int
+
+      ##########################################
+      # Total tests                            #
+      ##########################################
+
+      - name: Run all tests and generate test coverage file (excluding tests and testutils from coverage report)
+        if: env.RUN_TOTAL_TESTS == 'true'
+        run: |
+          set -e
+          set -o pipefail
+          go test -v ./tests -cover -coverpkg=./... -coverprofile=total.cover.out | tee total.test.out
+          grep -v '/tests/' total.cover.out | grep -v '/testutils/' > total.cover.out.filtered
+          mv total.cover.out.filtered total.cover.out
+        shell: bash
+
+      - name: Check total test coverage is above threshold
+        if: env.RUN_TOTAL_TESTS == 'true'
+        env:
+          TOTAL_TESTCOVERAGE_THRESHOLD: 0
+        run: |
+          echo "Checking total test coverage is above threshold..."
+          echo "Threshold             : $TOTAL_TESTCOVERAGE_THRESHOLD %"
+          intTotalCoverage=$(go tool cover -func=total.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          echo "Current total test coverage : $totalTotalCoverage %"
+          echo "-----------------------------------------------------------"
+          if [ "$(echo "$totalTotalCoverage >= $TOTAL_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "Total test coverage passed threshold OK"
+          else
+            echo "Current total test coverage is below threshold. Please add more tests or adjust threshold to a lower value."
+            echo "Failed"
+            exit 1
+          fi
+          echo "-----------------------------------------------------------"
+        shell: bash
+
+      - name: Show total test coverage summary
+        if: env.RUN_TOTAL_TESTS == 'true'
+        run: go tool cover -func=total.cover.out
+
+      - name: Generate Total HTML coverage report
+        if: env.RUN_INT_TESTS == 'true'
+        run: |
+          go tool cover -html=total.cover.out -o total.coverage.html
+
+      - name: Upload Total Tests HTML coverage report
+        if: env.RUN_TOTAL_TESTS == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-test-coverage-report
+          path: total.coverage.html
+
+      - name: Convert Go total.cover.out to lcov
+        if: env.RUN_TOTAL_TESTS == 'true'
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gcov2lcov -infile total.cover.out -outfile total.coverage.lcov
+
+      - name: Prepare total files for badge
+        if: env.RUN_TOTAL_TESTS == 'true'
+        run: |
+          cp total.coverage.lcov lcov.info
+          cp total.test.out test.out
+
+      - name: Total Coverage & Test Badges
+        if: env.RUN_TOTAL_TESTS == 'true'
+        uses: gaelgirodon/ci-badges-action@v1
+        with:
+          gist-id: ${{ secrets.TOTAL_TEST_GIST_ID }}
+          token: ${{ secrets.GIST_TOKEN }}
+          prefix: total
