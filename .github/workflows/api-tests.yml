@@ -286,7 +286,7 @@ jobs:
         run: |
           echo "Checking total test coverage is above threshold..."
           echo "Threshold             : $TOTAL_TESTCOVERAGE_THRESHOLD %"
-          intTotalCoverage=$(go tool cover -func=total.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          totalTotalCoverage=$(go tool cover -func=total.cover.out | awk '/^total:/ {gsub("%","",$3); print $3}')
           echo "Current total test coverage : $totalTotalCoverage %"
           echo "-----------------------------------------------------------"
           if [ "$(echo "$totalTotalCoverage >= $TOTAL_TESTCOVERAGE_THRESHOLD" | bc -l)" -eq 1 ]; then
