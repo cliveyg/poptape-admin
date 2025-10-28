@@ -158,19 +158,15 @@ func APICreateSaveRecordWithFixture(t *testing.T, appInstance *app.App, token, m
 		}
 
 		hooks.CreateGridFSUploadStreamFunc = func(db, filename string, metadata map[string]interface{}) (*gridfs.UploadStream, error) {
-			return nil, nil
+			return appInstance.CreateGridFSUploadStream(db, filename, metadata)
 		}
 
 		hooks.CopyToGridFSFunc = func(uploadStream *gridfs.UploadStream, stdout io.Reader, logPrefix string) (int64, error) {
-			n, err := io.Copy(io.Discard, stdout)
-			return n, err
+			return appInstance.CopyToGridFS(uploadStream, stdout, logPrefix)
 		}
 
 		hooks.SaveWithAutoVersionFunc = func(sr *app.SaveRecord) error {
-			if origHooks != nil {
-				return origHooks.SaveWithAutoVersion(sr)
-			}
-			return nil
+			return appInstance.SaveWithAutoVersion(sr)
 		}
 
 		hooks.IOCopyFunc = func(dst io.Writer, src io.Reader) (int64, error) {
