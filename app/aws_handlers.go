@@ -64,21 +64,21 @@ func (a *App) ListAllPoptapeStandardUsers(c *gin.Context) {
 // DeleteAWSUser
 //-----------------------------------------------------------------------------
 
-func (a *App) DeleteAWSUser(c *gin.Context) {
-
-	a.Log.Debug().Msg("DeleteAWSUser")
-	ctx := c.Request.Context()
-	buckets, err := a.AWS.ListAllStandardBuckets(ctx)
-	if err != nil {
-		a.Log.Info().Msgf("Error listing AWS buckets [%s]", err.Error())
-		if os.Getenv("ENVIRONMENT") == "DEV" {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "oopsy"})
-		return
-	}
-
-	nb := len(buckets)
-	c.JSON(http.StatusOK, gin.H{"no_of_buckets": nb, "buckets": buckets})
-}
+//func (a *App) DeleteAWSUser(c *gin.Context) {
+//
+//	a.Log.Debug().Msg("DeleteAWSUser")
+//	ctx := c.Request.Context()
+//	buckets, err := a.AWS.ListAllStandardBuckets(ctx)
+//	if err != nil {
+//		a.Log.Info().Msgf("Error listing AWS buckets [%s]", err.Error())
+//		if os.Getenv("ENVIRONMENT") == "DEV" {
+//			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+//			return
+//		}
+//		c.JSON(http.StatusInternalServerError, gin.H{"message": "oopsy"})
+//		return
+//	}
+//
+//	nb := len(buckets)
+//	c.JSON(http.StatusOK, gin.H{"no_of_buckets": nb, "buckets": buckets})
+//}
