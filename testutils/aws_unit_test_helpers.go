@@ -9,8 +9,6 @@ import (
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
-// Minimal, self-contained FakeIAM used by unit tests for DeleteUserCompletely
-// and CreateUserWithAccessKey. ListUsers returns IsTruncated: false (bool).
 type FakeIAM struct {
 	mu sync.Mutex
 
