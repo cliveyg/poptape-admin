@@ -122,10 +122,12 @@ jobs:
           apt-get update
           apt-get install -y mongodb-database-tools
 
-      - name: Install mongodb shell
+      - name: Install mongosh manually for Ubuntu noble
         run: |
-          apt-get update
-          apt-get install -y mongosh
+          wget https://downloads.mongodb.com/compass/mongosh-2.2.4-linux-x64.tgz
+          tar -xzf mongosh-2.2.4-linux-x64.tgz
+          mv mongosh-2.2.4-linux-x64/bin/mongosh /usr/local/bin/mongosh
+          chmod +x /usr/local/bin/mongosh
 
       # the user of the db needs to be in the db to match prod env for mongo based microservices
       - name: Create poptape_fotos user in poptape_fotos DB
