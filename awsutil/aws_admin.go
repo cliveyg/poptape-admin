@@ -21,7 +21,6 @@ type AWSAdmin struct {
 	Log *zerolog.Logger
 }
 
-// AWSAdminInterface describes the operations exposed by AWSAdmin.
 type AWSAdminInterface interface {
 	TestConnection(ctx context.Context) error
 	CreateUserWithAccessKey(ctx context.Context, userName string) (*iamtypes.AccessKey, error)
@@ -81,13 +80,12 @@ func (r LocalStackResolver) ResolveEndpoint(service, region string, options ...i
 	return aws.Endpoint{}, &aws.EndpointNotFoundError{}
 }
 
-// TestConnection does small IAM + S3 checks; uses marker/next-marker pagination to avoid IsTruncated pointer issues.
+// Implement ALL methods required by AWSAdminInterface:
+
 func (aw *AWSAdmin) TestConnection(ctx context.Context) error {
 	if aw.IAM == nil || aw.S3 == nil {
 		return fmt.Errorf("AWSAdmin not properly initialised")
 	}
-
-	// collect users using marker field only (works regardless of SDK bool pointer shape)
 	var collectedUsers []iamtypes.User
 	marker := ""
 	for {
@@ -101,21 +99,17 @@ func (aw *AWSAdmin) TestConnection(ctx context.Context) error {
 			return fmt.Errorf("IAM connection test failed: %w", err)
 		}
 		collectedUsers = append(collectedUsers, out.Users...)
-		// Continue if Marker is present (some SDKs set Marker for next page)
 		if out.Marker != nil && *out.Marker != "" {
 			marker = *out.Marker
 			continue
 		}
 		break
 	}
-
-	// Test S3: List buckets
 	bucks, err := aw.S3.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		aw.Log.Error().Err(err).Msg("S3 connection test failed")
 		return fmt.Errorf("S3 connection test failed: %w", err)
 	}
-
 	if os.Getenv("ENVIRONMENT") == "DEV" {
 		for _, user := range collectedUsers {
 			uname := ""
@@ -137,11 +131,9 @@ func (aw *AWSAdmin) TestConnection(ctx context.Context) error {
 			aw.Log.Debug().Msgf("Bucket name [%s], ARN [%s] Created [%s]", bname, arn, b.CreationDate)
 		}
 	}
-
 	return nil
 }
 
-// CreateUserWithAccessKey creates an IAM user and an access key for them.
 func (aw *AWSAdmin) CreateUserWithAccessKey(ctx context.Context, userName string) (*iamtypes.AccessKey, error) {
 	aw.Log.Info().Str("user", userName).Msg("Creating IAM user")
 	_, err := aw.IAM.CreateUser(ctx, &iam.CreateUserInput{UserName: &userName})
@@ -158,10 +150,8 @@ func (aw *AWSAdmin) CreateUserWithAccessKey(ctx context.Context, userName string
 	return keyOut.AccessKey, nil
 }
 
-// DeleteUserCompletely removes associated IAM resources then deletes the user.
 func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) error {
 	aw.Log.Info().Str("user", userName).Msg("Deleting IAM user and all attached resources")
-
 	keys, _ := aw.IAM.ListAccessKeys(ctx, &iam.ListAccessKeysInput{UserName: &userName})
 	for _, ak := range keys.AccessKeyMetadata {
 		_, err := aw.IAM.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{UserName: &userName, AccessKeyId: ak.AccessKeyId})
@@ -173,7 +163,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			}
 		}
 	}
-
 	pols, _ := aw.IAM.ListUserPolicies(ctx, &iam.ListUserPoliciesInput{UserName: &userName})
 	for _, pol := range pols.PolicyNames {
 		_, err := aw.IAM.DeleteUserPolicy(ctx, &iam.DeleteUserPolicyInput{UserName: &userName, PolicyName: &pol})
@@ -181,7 +170,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			aw.Log.Error().Err(err).Str("user", userName).Str("policy", pol).Msg("Failed to delete inline policy")
 		}
 	}
-
 	mpols, _ := aw.IAM.ListAttachedUserPolicies(ctx, &iam.ListAttachedUserPoliciesInput{UserName: &userName})
 	for _, mp := range mpols.AttachedPolicies {
 		if mp.PolicyArn != nil {
@@ -191,7 +179,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			}
 		}
 	}
-
 	grps, _ := aw.IAM.ListGroupsForUser(ctx, &iam.ListGroupsForUserInput{UserName: &userName})
 	for _, grp := range grps.Groups {
 		if grp.GroupName != nil {
@@ -201,9 +188,7 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			}
 		}
 	}
-
 	_, _ = aw.IAM.DeleteLoginProfile(ctx, &iam.DeleteLoginProfileInput{UserName: &userName})
-
 	certs, _ := aw.IAM.ListSigningCertificates(ctx, &iam.ListSigningCertificatesInput{UserName: &userName})
 	for _, cert := range certs.Certificates {
 		if cert.CertificateId != nil {
@@ -213,7 +198,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			}
 		}
 	}
-
 	mfas, _ := aw.IAM.ListMFADevices(ctx, &iam.ListMFADevicesInput{UserName: &userName})
 	for _, mfa := range mfas.MFADevices {
 		if mfa.SerialNumber != nil {
@@ -221,7 +205,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			_, _ = aw.IAM.DeleteVirtualMFADevice(ctx, &iam.DeleteVirtualMFADeviceInput{SerialNumber: mfa.SerialNumber})
 		}
 	}
-
 	sshkeys, _ := aw.IAM.ListSSHPublicKeys(ctx, &iam.ListSSHPublicKeysInput{UserName: &userName})
 	for _, key := range sshkeys.SSHPublicKeys {
 		if key.SSHPublicKeyId != nil {
@@ -231,7 +214,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			}
 		}
 	}
-
 	sscs, _ := aw.IAM.ListServiceSpecificCredentials(ctx, &iam.ListServiceSpecificCredentialsInput{UserName: &userName})
 	for _, cred := range sscs.ServiceSpecificCredentials {
 		if cred.ServiceSpecificCredentialId != nil {
@@ -241,7 +223,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 			}
 		}
 	}
-
 	_, err := aw.IAM.DeleteUser(ctx, &iam.DeleteUserInput{UserName: &userName})
 	if err != nil {
 		aw.Log.Error().Err(err).Str("user", userName).Msg("Failed to delete IAM user")
@@ -251,7 +232,6 @@ func (aw *AWSAdmin) DeleteUserCompletely(ctx context.Context, userName string) e
 	return nil
 }
 
-// ListAllUsers paginates using Marker (works with concrete SDKs and fakes).
 func (aw *AWSAdmin) ListAllUsers(ctx context.Context) ([]iamtypes.User, error) {
 	var users []iamtypes.User
 	marker := ""
@@ -274,20 +254,16 @@ func (aw *AWSAdmin) ListAllUsers(ctx context.Context) ([]iamtypes.User, error) {
 	return users, nil
 }
 
-// CreateBucket uses the S3API CreateBucket call.
 func (aw *AWSAdmin) CreateBucket(ctx context.Context, bucketName string) error {
 	aw.Log.Info().Str("bucket", bucketName).Msg("Creating S3 bucket")
 	_, err := aw.S3.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: &bucketName})
 	return err
 }
 
-// EmptyBucket removes all object versions and delete markers using ListObjectVersions and DeleteObjects.
 func (aw *AWSAdmin) EmptyBucket(ctx context.Context, bucketName string) error {
 	aw.Log.Info().Str("bucket", bucketName).Msg("Emptying S3 bucket")
-
 	var keyMarker *string
 	var versionMarker *string
-
 	for {
 		req := &s3.ListObjectVersionsInput{Bucket: &bucketName}
 		if keyMarker != nil {
@@ -296,13 +272,11 @@ func (aw *AWSAdmin) EmptyBucket(ctx context.Context, bucketName string) error {
 		if versionMarker != nil {
 			req.VersionIdMarker = versionMarker
 		}
-
 		page, err := aw.S3.ListObjectVersions(ctx, req)
 		if err != nil {
 			aw.Log.Error().Err(err).Str("bucket", bucketName).Msg("Failed to list object versions")
 			return err
 		}
-
 		var toDelete []s3types.ObjectIdentifier
 		for _, v := range page.Versions {
 			toDelete = append(toDelete, s3types.ObjectIdentifier{Key: v.Key, VersionId: v.VersionId})
@@ -310,7 +284,6 @@ func (aw *AWSAdmin) EmptyBucket(ctx context.Context, bucketName string) error {
 		for _, d := range page.DeleteMarkers {
 			toDelete = append(toDelete, s3types.ObjectIdentifier{Key: d.Key, VersionId: d.VersionId})
 		}
-
 		if len(toDelete) > 0 {
 			_, err := aw.S3.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 				Bucket: &bucketName,
@@ -321,8 +294,6 @@ func (aw *AWSAdmin) EmptyBucket(ctx context.Context, bucketName string) error {
 				return err
 			}
 		}
-
-		// Continue if next markers present
 		if page.NextKeyMarker != nil && *page.NextKeyMarker != "" {
 			keyMarker = page.NextKeyMarker
 			versionMarker = page.NextVersionIdMarker
@@ -335,12 +306,10 @@ func (aw *AWSAdmin) EmptyBucket(ctx context.Context, bucketName string) error {
 		}
 		break
 	}
-
 	aw.Log.Info().Str("bucket", bucketName).Msg("Bucket emptied")
 	return nil
 }
 
-// DeleteBucketCompletely empties then deletes the bucket.
 func (aw *AWSAdmin) DeleteBucketCompletely(ctx context.Context, bucketName string) error {
 	if err := aw.EmptyBucket(ctx, bucketName); err != nil {
 		return err
@@ -355,7 +324,6 @@ func (aw *AWSAdmin) DeleteBucketCompletely(ctx context.Context, bucketName strin
 	return nil
 }
 
-// ListAllStandardBuckets returns buckets whose names start with "psb-".
 func (aw *AWSAdmin) ListAllStandardBuckets(ctx context.Context) ([]s3types.Bucket, error) {
 	out, err := aw.S3.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {

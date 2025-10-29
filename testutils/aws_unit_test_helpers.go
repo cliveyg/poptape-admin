@@ -2,17 +2,16 @@ package testutils
 
 import (
 	"context"
-	"sync"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"sync"
 )
 
+// FakeIAM implements IAMAPI for unit tests.
 type FakeIAM struct {
 	mu sync.Mutex
 
-	// Error fields needed for aws_create_user_test.go
 	CreateUserErr      error
 	CreateAccessKeyErr error
 
@@ -25,7 +24,6 @@ type FakeIAM struct {
 	SSHPublicKeys              map[string][]iamtypes.SSHPublicKeyMetadata
 	ServiceSpecificCredentials map[string][]iamtypes.ServiceSpecificCredentialMetadata
 
-	// Optional errors to simulate failures for DeleteUserCompletely tests
 	DeleteAccessKeyErr                 error
 	DeleteUserPolicyErr                error
 	DetachUserPolicyErr                error
@@ -37,7 +35,6 @@ type FakeIAM struct {
 	DeleteServiceSpecificCredentialErr error
 	DeleteUserErr                      error
 
-	// Recorded operations for assertions
 	DeletedAccessKeys        []struct{ User, AccessKeyId string }
 	DeletedUserPolicies      []struct{ User, PolicyName string }
 	DetachedUserPolicies     []struct{ User, PolicyArn string }
@@ -77,7 +74,6 @@ func (f *FakeIAM) ensureMaps() {
 	}
 }
 
-// CreateUser returns error if CreateUserErr is set.
 func (f *FakeIAM) CreateUser(ctx context.Context, in *iam.CreateUserInput, optFns ...func(*iam.Options)) (*iam.CreateUserOutput, error) {
 	_ = optFns
 	if f.CreateUserErr != nil {
@@ -86,7 +82,6 @@ func (f *FakeIAM) CreateUser(ctx context.Context, in *iam.CreateUserInput, optFn
 	return &iam.CreateUserOutput{}, nil
 }
 
-// CreateAccessKey returns error if CreateAccessKeyErr is set.
 func (f *FakeIAM) CreateAccessKey(ctx context.Context, in *iam.CreateAccessKeyInput, optFns ...func(*iam.Options)) (*iam.CreateAccessKeyOutput, error) {
 	_ = optFns
 	if f.CreateAccessKeyErr != nil {
@@ -100,16 +95,14 @@ func (f *FakeIAM) CreateAccessKey(ctx context.Context, in *iam.CreateAccessKeyIn
 	}, nil
 }
 
-// ListUsers - returns IsTruncated: false (type bool) for compatibility with your tests.
 func (f *FakeIAM) ListUsers(ctx context.Context, in *iam.ListUsersInput, optFns ...func(*iam.Options)) (*iam.ListUsersOutput, error) {
 	_ = optFns
 	return &iam.ListUsersOutput{
 		Users:       []iamtypes.User{},
-		IsTruncated: false, // <-- THIS IS THE FIX
+		IsTruncated: false,
 	}, nil
 }
 
-// ListAccessKeys returns configured access keys for the provided user.
 func (f *FakeIAM) ListAccessKeys(ctx context.Context, in *iam.ListAccessKeysInput, optFns ...func(*iam.Options)) (*iam.ListAccessKeysOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -126,7 +119,6 @@ func (f *FakeIAM) ListAccessKeys(ctx context.Context, in *iam.ListAccessKeysInpu
 	return &iam.ListAccessKeysOutput{AccessKeyMetadata: meta}, nil
 }
 
-// DeleteAccessKey records invocation and returns configured error if any.
 func (f *FakeIAM) DeleteAccessKey(ctx context.Context, in *iam.DeleteAccessKeyInput, optFns ...func(*iam.Options)) (*iam.DeleteAccessKeyOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -145,7 +137,6 @@ func (f *FakeIAM) DeleteAccessKey(ctx context.Context, in *iam.DeleteAccessKeyIn
 	if f.DeleteAccessKeyErr != nil {
 		return nil, f.DeleteAccessKeyErr
 	}
-	// remove from configured list if present
 	if arr, ok := f.AccessKeys[user]; ok {
 		newArr := make([]iamtypes.AccessKeyMetadata, 0, len(arr))
 		for _, a := range arr {
@@ -158,7 +149,6 @@ func (f *FakeIAM) DeleteAccessKey(ctx context.Context, in *iam.DeleteAccessKeyIn
 	return &iam.DeleteAccessKeyOutput{}, nil
 }
 
-// ListUserPolicies returns configured inline policy names.
 func (f *FakeIAM) ListUserPolicies(ctx context.Context, in *iam.ListUserPoliciesInput, optFns ...func(*iam.Options)) (*iam.ListUserPoliciesOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -171,7 +161,6 @@ func (f *FakeIAM) ListUserPolicies(ctx context.Context, in *iam.ListUserPolicies
 	return &iam.ListUserPoliciesOutput{PolicyNames: f.UserPolicies[user]}, nil
 }
 
-// DeleteUserPolicy records the deletion and may return configured error.
 func (f *FakeIAM) DeleteUserPolicy(ctx context.Context, in *iam.DeleteUserPolicyInput, optFns ...func(*iam.Options)) (*iam.DeleteUserPolicyOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -193,7 +182,6 @@ func (f *FakeIAM) DeleteUserPolicy(ctx context.Context, in *iam.DeleteUserPolicy
 	return &iam.DeleteUserPolicyOutput{}, nil
 }
 
-// ListAttachedUserPolicies returns configured attached policies.
 func (f *FakeIAM) ListAttachedUserPolicies(ctx context.Context, in *iam.ListAttachedUserPoliciesInput, optFns ...func(*iam.Options)) (*iam.ListAttachedUserPoliciesOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -206,7 +194,6 @@ func (f *FakeIAM) ListAttachedUserPolicies(ctx context.Context, in *iam.ListAtta
 	return &iam.ListAttachedUserPoliciesOutput{AttachedPolicies: f.AttachedPolicies[user]}, nil
 }
 
-// DetachUserPolicy records the detach and may return configured error.
 func (f *FakeIAM) DetachUserPolicy(ctx context.Context, in *iam.DetachUserPolicyInput, optFns ...func(*iam.Options)) (*iam.DetachUserPolicyOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -228,7 +215,6 @@ func (f *FakeIAM) DetachUserPolicy(ctx context.Context, in *iam.DetachUserPolicy
 	return &iam.DetachUserPolicyOutput{}, nil
 }
 
-// ListGroupsForUser returns configured groups for the user.
 func (f *FakeIAM) ListGroupsForUser(ctx context.Context, in *iam.ListGroupsForUserInput, optFns ...func(*iam.Options)) (*iam.ListGroupsForUserOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -241,7 +227,6 @@ func (f *FakeIAM) ListGroupsForUser(ctx context.Context, in *iam.ListGroupsForUs
 	return &iam.ListGroupsForUserOutput{Groups: f.GroupsForUser[user]}, nil
 }
 
-// RemoveUserFromGroup records the removal and may return configured error.
 func (f *FakeIAM) RemoveUserFromGroup(ctx context.Context, in *iam.RemoveUserFromGroupInput, optFns ...func(*iam.Options)) (*iam.RemoveUserFromGroupOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -263,13 +248,11 @@ func (f *FakeIAM) RemoveUserFromGroup(ctx context.Context, in *iam.RemoveUserFro
 	return &iam.RemoveUserFromGroupOutput{}, nil
 }
 
-// DeleteLoginProfile - stub.
 func (f *FakeIAM) DeleteLoginProfile(ctx context.Context, in *iam.DeleteLoginProfileInput, optFns ...func(*iam.Options)) (*iam.DeleteLoginProfileOutput, error) {
 	_ = optFns
 	return &iam.DeleteLoginProfileOutput{}, nil
 }
 
-// ListSigningCertificates returns configured certificates.
 func (f *FakeIAM) ListSigningCertificates(ctx context.Context, in *iam.ListSigningCertificatesInput, optFns ...func(*iam.Options)) (*iam.ListSigningCertificatesOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -282,7 +265,6 @@ func (f *FakeIAM) ListSigningCertificates(ctx context.Context, in *iam.ListSigni
 	return &iam.ListSigningCertificatesOutput{Certificates: f.SigningCertificates[user]}, nil
 }
 
-// DeleteSigningCertificate records and may return configured error.
 func (f *FakeIAM) DeleteSigningCertificate(ctx context.Context, in *iam.DeleteSigningCertificateInput, optFns ...func(*iam.Options)) (*iam.DeleteSigningCertificateOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -304,7 +286,6 @@ func (f *FakeIAM) DeleteSigningCertificate(ctx context.Context, in *iam.DeleteSi
 	return &iam.DeleteSigningCertificateOutput{}, nil
 }
 
-// ListMFADevices returns configured MFA devices for a user.
 func (f *FakeIAM) ListMFADevices(ctx context.Context, in *iam.ListMFADevicesInput, optFns ...func(*iam.Options)) (*iam.ListMFADevicesOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -317,7 +298,6 @@ func (f *FakeIAM) ListMFADevices(ctx context.Context, in *iam.ListMFADevicesInpu
 	return &iam.ListMFADevicesOutput{MFADevices: f.MFADevices[user]}, nil
 }
 
-// DeactivateMFADevice records the deactivation and may return configured error.
 func (f *FakeIAM) DeactivateMFADevice(ctx context.Context, in *iam.DeactivateMFADeviceInput, optFns ...func(*iam.Options)) (*iam.DeactivateMFADeviceOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -339,7 +319,6 @@ func (f *FakeIAM) DeactivateMFADevice(ctx context.Context, in *iam.DeactivateMFA
 	return &iam.DeactivateMFADeviceOutput{}, nil
 }
 
-// DeleteVirtualMFADevice records the deletion and may return configured error.
 func (f *FakeIAM) DeleteVirtualMFADevice(ctx context.Context, in *iam.DeleteVirtualMFADeviceInput, optFns ...func(*iam.Options)) (*iam.DeleteVirtualMFADeviceOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -355,7 +334,6 @@ func (f *FakeIAM) DeleteVirtualMFADevice(ctx context.Context, in *iam.DeleteVirt
 	return &iam.DeleteVirtualMFADeviceOutput{}, nil
 }
 
-// ListSSHPublicKeys returns configured SSH public keys for a user.
 func (f *FakeIAM) ListSSHPublicKeys(ctx context.Context, in *iam.ListSSHPublicKeysInput, optFns ...func(*iam.Options)) (*iam.ListSSHPublicKeysOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -368,7 +346,6 @@ func (f *FakeIAM) ListSSHPublicKeys(ctx context.Context, in *iam.ListSSHPublicKe
 	return &iam.ListSSHPublicKeysOutput{SSHPublicKeys: f.SSHPublicKeys[user]}, nil
 }
 
-// DeleteSSHPublicKey records the deletion and may return configured error.
 func (f *FakeIAM) DeleteSSHPublicKey(ctx context.Context, in *iam.DeleteSSHPublicKeyInput, optFns ...func(*iam.Options)) (*iam.DeleteSSHPublicKeyOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -390,7 +367,6 @@ func (f *FakeIAM) DeleteSSHPublicKey(ctx context.Context, in *iam.DeleteSSHPubli
 	return &iam.DeleteSSHPublicKeyOutput{}, nil
 }
 
-// ListServiceSpecificCredentials returns configured service-specific credentials for a user.
 func (f *FakeIAM) ListServiceSpecificCredentials(ctx context.Context, in *iam.ListServiceSpecificCredentialsInput, optFns ...func(*iam.Options)) (*iam.ListServiceSpecificCredentialsOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -403,7 +379,6 @@ func (f *FakeIAM) ListServiceSpecificCredentials(ctx context.Context, in *iam.Li
 	return &iam.ListServiceSpecificCredentialsOutput{ServiceSpecificCredentials: f.ServiceSpecificCredentials[user]}, nil
 }
 
-// DeleteServiceSpecificCredential records the deletion and may return configured error.
 func (f *FakeIAM) DeleteServiceSpecificCredential(ctx context.Context, in *iam.DeleteServiceSpecificCredentialInput, optFns ...func(*iam.Options)) (*iam.DeleteServiceSpecificCredentialOutput, error) {
 	_ = optFns
 	f.mu.Lock()
@@ -425,7 +400,6 @@ func (f *FakeIAM) DeleteServiceSpecificCredential(ctx context.Context, in *iam.D
 	return &iam.DeleteServiceSpecificCredentialOutput{}, nil
 }
 
-// DeleteUser records invocation and may return configured error.
 func (f *FakeIAM) DeleteUser(ctx context.Context, in *iam.DeleteUserInput, optFns ...func(*iam.Options)) (*iam.DeleteUserOutput, error) {
 	_ = optFns
 	f.mu.Lock()

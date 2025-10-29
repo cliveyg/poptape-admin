@@ -2,10 +2,9 @@ package testutils
 
 import (
 	"context"
-	"os"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"os"
 )
 
 const DefaultAWSRegion = "us-east-1"
