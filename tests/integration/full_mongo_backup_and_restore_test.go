@@ -21,9 +21,9 @@ func TestFullMongoBackupAndRestore_HappyPath(t *testing.T) {
 	// --- Step 1: Create creds record via API ---
 	testutils.ResetPostgresDB(t, TestApp) // Clean slate in system DB
 
-	// Extract mongo-test connection info from CI yaml
-	mongoHost := "localhost"
-	mongoPort := "27018" // maps to 27017 in service
+	// Use docker service name and internal port for CI network!
+	mongoHost := "mongo-test"
+	mongoPort := "27017"
 	mongoDB := "poptape_fotos"
 	mongoUser := "poptape_fotos"
 	mongoPass := "6743929283749d932"
@@ -64,7 +64,6 @@ func TestFullMongoBackupAndRestore_HappyPath(t *testing.T) {
 	defer client.Disconnect(context.Background())
 
 	coll := client.Database(mongoDB).Collection("animals")
-	// Insert records
 	docs := []interface{}{
 		bson.M{"name": "Lion", "type": "Mammal"},
 		bson.M{"name": "Parrot", "type": "Bird"},
@@ -73,7 +72,6 @@ func TestFullMongoBackupAndRestore_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// --- Step 3: Backup the DB via API ---
-	// Get microservice ID for "fotos"
 	reqMS, _ := http.NewRequest("GET", "/admin/microservices", nil)
 	reqMS.Header.Set("y-access-token", token)
 	wMS := httptest.NewRecorder()
@@ -95,7 +93,6 @@ func TestFullMongoBackupAndRestore_HappyPath(t *testing.T) {
 	}
 	require.NotEmpty(t, msID)
 
-	// Backup API call
 	backupURL := fmt.Sprintf("/admin/save/%s/%s?mode=all", msID, mongoDB)
 	reqBackup, _ := http.NewRequest("GET", backupURL, nil)
 	reqBackup.Header.Set("y-access-token", token)
