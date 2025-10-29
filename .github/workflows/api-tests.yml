@@ -120,8 +120,8 @@ jobs:
       - name: Set unit, integration and total test flags
         run: |
           echo "RUN_UNIT_TESTS=false" >> $GITHUB_ENV
-          echo "RUN_INT_TESTS=true" >> $GITHUB_ENV
-          echo "RUN_TOTAL_TESTS=false" >> $GITHUB_ENV
+          echo "RUN_INT_TESTS=false" >> $GITHUB_ENV
+          echo "RUN_TOTAL_TESTS=true" >> $GITHUB_ENV
           touch poptape_admin.log
 
       ##########################################
@@ -203,8 +203,8 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          # go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
-          go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestDeleteSaveById' | tee int.test.out
+          go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
+          # go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestDeleteSaveById' | tee int.test.out
           grep -v '/tests/' int.cover.out | grep -v '/testutils/' > int.cover.out.filtered
           mv int.cover.out.filtered int.cover.out
         shell: bash
@@ -212,7 +212,8 @@ jobs:
       - name: Check integration test coverage is above threshold
         if: env.RUN_INT_TESTS == 'true'
         env:
-          INT_TESTCOVERAGE_THRESHOLD: 0
+          #INT_TESTCOVERAGE_THRESHOLD: 0
+          INT_TESTCOVERAGE_THRESHOLD: 60
         run: |
           echo "Checking integration test coverage is above threshold..."
           echo "Threshold             : $INT_TESTCOVERAGE_THRESHOLD %"
