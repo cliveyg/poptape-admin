@@ -333,7 +333,7 @@ jobs:
       - name: Check total test coverage is above threshold
         if: env.RUN_TOTAL_TESTS == 'true'
         env:
-          TOTAL_TESTCOVERAGE_THRESHOLD: 80
+          TOTAL_TESTCOVERAGE_THRESHOLD: 85
         run: |
           echo "Checking total test coverage is above threshold..."
           echo "Threshold             : $TOTAL_TESTCOVERAGE_THRESHOLD %"
