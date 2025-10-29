@@ -5,6 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"sync"
 )
 
@@ -413,4 +414,75 @@ func (f *FakeIAM) DeleteUser(ctx context.Context, in *iam.DeleteUserInput, optFn
 		return nil, f.DeleteUserErr
 	}
 	return &iam.DeleteUserOutput{}, nil
+}
+
+// ------------------------------------
+// FakeS3 implements S3API for unit tests.
+// ------------------------------------
+
+type FakeS3 struct {
+	mu sync.Mutex
+
+	// For simulating ListObjectVersions responses
+	ListObjectVersionsOutputs []*s3.ListObjectVersionsOutput
+	ListObjectVersionsErrs    []error
+	ListObjectVersionsCalls   int
+
+	// For simulating DeleteObjects responses
+	DeleteObjectsInputs []*s3.DeleteObjectsInput
+	DeleteObjectsErrs   []error
+	DeleteObjectsCalls  int
+
+	// For simulating DeleteBucket responses
+	DeleteBucketErr   error
+	DeleteBucketCalls int
+}
+
+func (f *FakeS3) ListBuckets(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error) {
+	return &s3.ListBucketsOutput{}, nil
+}
+
+func (f *FakeS3) CreateBucket(ctx context.Context, params *s3.CreateBucketInput, optFns ...func(*s3.Options)) (*s3.CreateBucketOutput, error) {
+	return &s3.CreateBucketOutput{}, nil
+}
+
+func (f *FakeS3) DeleteBucket(ctx context.Context, params *s3.DeleteBucketInput, optFns ...func(*s3.Options)) (*s3.DeleteBucketOutput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.DeleteBucketCalls++
+	if f.DeleteBucketErr != nil {
+		return nil, f.DeleteBucketErr
+	}
+	return &s3.DeleteBucketOutput{}, nil
+}
+
+func (f *FakeS3) ListObjectVersions(ctx context.Context, params *s3.ListObjectVersionsInput, optFns ...func(*s3.Options)) (*s3.ListObjectVersionsOutput, error) {
+	call := f.ListObjectVersionsCalls
+	f.ListObjectVersionsCalls++
+	if call < len(f.ListObjectVersionsOutputs) {
+		return f.ListObjectVersionsOutputs[call], f.ListObjectVersionsErrs[call]
+	}
+	return &s3.ListObjectVersionsOutput{}, nil
+}
+
+func (f *FakeS3) DeleteObjects(ctx context.Context, params *s3.DeleteObjectsInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	call := f.DeleteObjectsCalls
+	f.DeleteObjectsCalls++
+	f.DeleteObjectsInputs = append(f.DeleteObjectsInputs, params)
+	if call < len(f.DeleteObjectsErrs) {
+		return &s3.DeleteObjectsOutput{}, f.DeleteObjectsErrs[call]
+	}
+	return &s3.DeleteObjectsOutput{}, nil
+}
+
+// Constructor for convenience in tests
+func NewFakeS3() *FakeS3 {
+	return &FakeS3{
+		ListObjectVersionsOutputs: []*s3.ListObjectVersionsOutput{},
+		ListObjectVersionsErrs:    []error{},
+		DeleteObjectsInputs:       []*s3.DeleteObjectsInput{},
+		DeleteObjectsErrs:         []error{},
+	}
 }
