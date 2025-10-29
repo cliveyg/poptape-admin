@@ -117,10 +117,10 @@ jobs:
       #  tests                                 #
       ##########################################
 
-      - name: Set unit and integration test flags
+      - name: Set unit, integration and total test flags
         run: |
-          echo "RUN_UNIT_TESTS=true" >> $GITHUB_ENV
-          echo "RUN_INT_TESTS=true" >> $GITHUB_ENV
+          echo "RUN_UNIT_TESTS=false" >> $GITHUB_ENV
+          echo "RUN_INT_TESTS=false" >> $GITHUB_ENV
           echo "RUN_TOTAL_TESTS=true" >> $GITHUB_ENV
           touch poptape_admin.log
 
