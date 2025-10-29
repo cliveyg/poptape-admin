@@ -112,6 +112,7 @@ jobs:
           CGO_ENABLED: 0
         run: go build -o /dev/null ./...
 
+      # prep app container and mongo-test service for full happy path test
       - name: Install mongodb tools (mongodump/mongorestore)
         run: |
           apt-get update
@@ -121,6 +122,20 @@ jobs:
           apt-get update
           apt-get install -y mongodb-database-tools
 
+      # the user of the db needs to be in the db to match prod env for mongo based microservices
+      - name: Create poptape_fotos user in poptape_fotos DB
+        run: |
+          # Create user in poptape_fotos DB
+          mongo --host mongo-test --port 27017 -u poptape_fotos -p 6743929283749d932 --authenticationDatabase admin <<'EOF'
+          use poptape_fotos
+          db.createUser({
+            user: "poptape_fotos",
+            pwd: "6743929283749d932",
+            roles: [ { role: "readWrite", db: "poptape_fotos" } ]
+          })
+          EOF
+
+      # .env stuff
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
@@ -129,6 +144,7 @@ jobs:
         run: |
           find . -type d -exec cp .env {}/.env \;
 
+      # install stuff for code coverage
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
