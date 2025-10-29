@@ -50,6 +50,19 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      mongo-test:
+        image: mongo
+        env:
+          MONGO_INITDB_ROOT_USERNAME: poptape_fotos
+          MONGO_INITDB_ROOT_PASSWORD: 6743929283749d932
+          MONGO_INITDB_DATABASE: poptape_fotos
+        ports:
+          - 27018:27017
+        options: >-
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       localstack:
         image: localstack/localstack:latest
         ports:
@@ -99,6 +112,42 @@ jobs:
           CGO_ENABLED: 0
         run: go build -o /dev/null ./...
 
+      # prep app container and mongo-test service for full happy path test
+      - name: Install mongodb tools (mongodump/mongorestore)
+        run: |
+          apt-get update
+          apt-get install -y wget gnupg lsb-release
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+          echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          apt-get update
+          apt-get install -y mongodb-database-tools
+
+      - name: Install mongosh manually for Ubuntu noble
+        run: |
+          wget https://downloads.mongodb.com/compass/mongosh-2.2.4-linux-x64.tgz
+          tar -xzf mongosh-2.2.4-linux-x64.tgz
+          mv mongosh-2.2.4-linux-x64/bin/mongosh /usr/local/bin/mongosh
+          chmod +x /usr/local/bin/mongosh
+
+      # the user of the db needs to be in the db to match prod env for mongo based microservices
+      - name: Create poptape_fotos user in poptape_fotos DB
+        run: |
+          # Wait for mongo-test to be ready
+          for i in {1..15}; do
+            mongosh --host mongo-test --port 27017 --eval "db.adminCommand('ping')" && break
+            sleep 2
+          done
+          # Create user in poptape_fotos DB
+          mongosh --host mongo-test --port 27017 -u poptape_fotos -p 6743929283749d932 --authenticationDatabase admin <<'EOF'
+          use poptape_fotos
+          db.createUser({
+            user: "poptape_fotos",
+            pwd: "6743929283749d932",
+            roles: [ { role: "readWrite", db: "poptape_fotos" } ]
+          })
+          EOF
+
+      # .env stuff
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
@@ -107,6 +156,7 @@ jobs:
         run: |
           find . -type d -exec cp .env {}/.env \;
 
+      # install stuff for code coverage
       - name: Install bc
         run: apt-get update && apt-get install --yes --no-install-recommends bc
 
@@ -204,7 +254,7 @@ jobs:
           set -e
           set -o pipefail
           go test -v ./tests/integration -cover -coverpkg=./... -coverprofile=int.cover.out | tee int.test.out
-          # go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestRestoreBySaveID' | tee int.test.out
+          # go test -v -cover -coverprofile=int.cover.out ./tests/integration -run '^TestFullMongoBackupAndRestore_HappyPath' | tee int.test.out
           grep -v '/tests/' int.cover.out | grep -v '/testutils/' > int.cover.out.filtered
           mv int.cover.out.filtered int.cover.out
         shell: bash
@@ -212,6 +262,7 @@ jobs:
       - name: Check integration test coverage is above threshold
         if: env.RUN_INT_TESTS == 'true'
         env:
+          #INT_TESTCOVERAGE_THRESHOLD: 0
           INT_TESTCOVERAGE_THRESHOLD: 60
         run: |
           echo "Checking integration test coverage is above threshold..."
