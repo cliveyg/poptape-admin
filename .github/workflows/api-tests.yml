@@ -125,7 +125,7 @@ jobs:
       - name: Install MongoDB Shell (mongo client)
         run: |
           apt-get update
-          apt-get install -y mongodb-clients    
+          apt-get install -y mongodb-org-shell    
 
       # the user of the db needs to be in the db to match prod env for mongo based microservices
       - name: Create poptape_fotos user in poptape_fotos DB
