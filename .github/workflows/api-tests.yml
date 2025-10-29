@@ -141,7 +141,7 @@ jobs:
       - name: Check unit test coverage is above threshold
         if: env.RUN_UNIT_TESTS == 'true'
         env:
-          UNIT_TESTCOVERAGE_THRESHOLD: 0
+          UNIT_TESTCOVERAGE_THRESHOLD: 60
         run: |
           echo "Checking unit test coverage is above threshold..."
           echo "Threshold             : $UNIT_TESTCOVERAGE_THRESHOLD %"
@@ -212,7 +212,7 @@ jobs:
       - name: Check integration test coverage is above threshold
         if: env.RUN_INT_TESTS == 'true'
         env:
-          INT_TESTCOVERAGE_THRESHOLD: 0
+          INT_TESTCOVERAGE_THRESHOLD: 60
         run: |
           echo "Checking integration test coverage is above threshold..."
           echo "Threshold             : $INT_TESTCOVERAGE_THRESHOLD %"
@@ -282,7 +282,7 @@ jobs:
       - name: Check total test coverage is above threshold
         if: env.RUN_TOTAL_TESTS == 'true'
         env:
-          TOTAL_TESTCOVERAGE_THRESHOLD: 0
+          TOTAL_TESTCOVERAGE_THRESHOLD: 80
         run: |
           echo "Checking total test coverage is above threshold..."
           echo "Threshold             : $TOTAL_TESTCOVERAGE_THRESHOLD %"
