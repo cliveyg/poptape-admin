@@ -2,7 +2,7 @@ package testutils
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +12,8 @@ import (
 )
 
 func SetupLogger() *zerolog.Logger {
-	var logWriter = os.Stdout
+	//var logWriter = os.Stdout
+	var logWriter = io.Discard
 	cw := zerolog.ConsoleWriter{Out: logWriter, NoColor: true, TimeFormat: time.RFC3339}
 	cw.FormatLevel = func(i interface{}) string {
 		return strings.ToUpper(fmt.Sprintf("[ %-6s]", i))
