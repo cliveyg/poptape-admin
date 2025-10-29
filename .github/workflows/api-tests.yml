@@ -116,7 +116,7 @@ jobs:
       - name: Install mongodb tools (mongodump/mongorestore)
         run: |
           apt-get update
-          apt-get install -y wget gnupg
+          apt-get install -y wget gnupg lsb-release
           wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
           echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
           apt-get update
@@ -125,15 +125,22 @@ jobs:
       - name: Install mongodb shell
         run: |
           apt-get update
-          apt-get install -y wget gnupg
+          apt-get install -y wget gnupg lsb-release
           wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
           echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
           apt-get update
-          apt-get install -y mongodb-org-shell  
+          apt-get install -y mongodb-org-shell
+          which mongo || echo "mongo not found in PATH"
+          mongo --version || echo "mongo version not found"
 
       # the user of the db needs to be in the db to match prod env for mongo based microservices
       - name: Create poptape_fotos user in poptape_fotos DB
         run: |
+          # Wait for mongo-test to be ready
+          for i in {1..15}; do
+            mongo --host mongo-test --port 27017 --eval "db.adminCommand('ping')" && break
+            sleep 2
+          done
           # Create user in poptape_fotos DB
           mongo --host mongo-test --port 27017 -u poptape_fotos -p 6743929283749d932 --authenticationDatabase admin <<'EOF'
           use poptape_fotos
