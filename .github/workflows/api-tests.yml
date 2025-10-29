@@ -112,6 +112,15 @@ jobs:
           CGO_ENABLED: 0
         run: go build -o /dev/null ./...
 
+      - name: Install mongodb tools (mongodump/mongorestore)
+        run: |
+          apt-get update
+          apt-get install -y wget gnupg
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+          echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          apt-get update
+          apt-get install -y mongodb-database-tools
+
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
