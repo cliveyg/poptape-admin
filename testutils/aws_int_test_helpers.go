@@ -147,7 +147,7 @@ func GetAWSS3Client(ctx context.Context) *s3.Client {
 	if err != nil {
 		panic(err)
 	}
-	return aw.S3
+	return aw.S3.(*s3.Client)
 }
 
 // CreateS3Bucket creates a bucket by name (ignores errors if already exists).

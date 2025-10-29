@@ -39,7 +39,10 @@ type DBInterface interface {
 	Scan(dest interface{}) *gorm.DB
 }
 
+//-----------------------------------------------------------------------------
 // GormDB implements DBInterface for gorm.DB
+//-----------------------------------------------------------------------------
+
 type GormDB struct {
 	db *gorm.DB
 }
