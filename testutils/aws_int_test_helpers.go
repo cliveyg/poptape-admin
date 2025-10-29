@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -142,7 +143,8 @@ func GetAllIAMUsers(ctx context.Context, client *iam.Client) ([]types.User, erro
 
 // GetAWSS3Client returns a real or localstack S3 client for integration tests.
 func GetAWSS3Client(ctx context.Context) *s3.Client {
-	logger := zerolog.New(os.Stdout)
+	//logger := zerolog.New(os.Stdout)
+	logger := zerolog.New(io.Discard)
 	aw, err := awsutil.NewAWSAdmin(ctx, &logger)
 	if err != nil {
 		panic(err)

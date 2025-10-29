@@ -125,6 +125,7 @@ func (m *MockDB) Scan(dest interface{}) *gorm.DB {
 //-----------------------------------------------------------------------------
 
 func CreateTestLogger() *zerolog.Logger {
+	//logger := zerolog.New(os.Stdout)
 	logger := zerolog.New(io.Discard)
 	return &logger
 }

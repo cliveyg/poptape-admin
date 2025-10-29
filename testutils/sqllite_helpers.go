@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"io"
 	"testing"
 	"time"
 )
@@ -29,7 +30,7 @@ func SetupTestAppWithSQLite() (*app.App, *gorm.DB) {
 	_ = db.AutoMigrate(&app.Role{}, &app.Cred{}, &app.Microservice{}, &app.SaveRecord{}, &app.RoleCredMS{}, &app.User{})
 	gormDB := app.NewGormDB(db)
 	//loggr := zerolog.New(os.Stdout)
-	loggr := zerolog.New(nil)
+	loggr := zerolog.New(io.Discard)
 	a := &app.App{
 		DB:  gormDB,
 		Log: &loggr,
